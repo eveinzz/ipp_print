@@ -1,0 +1,10 @@
+# Dart/Flutter pub exclusions
+.dart_tool/
+.packages
+build/
+pubspec.lock
+
+# IDE
+.idea/
+*.iml
+.DS_Store

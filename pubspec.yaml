@@ -1,0 +1,28 @@
+name: ipp_print
+description: >-
+  Headless IPP direct-printing kernel for Flutter/Dart: mDNS printer
+  discovery, deterministic capability classification (AirPrint / IPP-direct /
+  vendor-only) and IPP Print-Job transport with PWG-raster encoding.
+  No UI by design — presentation is left to the host app.
+version: 0.1.0
+# 发布日移除本行（当前保持禁发，防误发布）。
+publish_to: none
+# TODO(publish): 替换为真实仓库地址后移除 publish_to。
+repository: https://github.com/REPLACE-ME/ipp_print
+issue_tracker: https://github.com/REPLACE-ME/ipp_print/issues
+topics:
+  - printing
+  - ipp
+  - printer
+  - mdns
+  - airprint
+
+environment:
+  sdk: ^3.4.0
+
+dependencies:
+  multicast_dns: ^0.3.2+7
+
+dev_dependencies:
+  lints: ^4.0.0
+  test: ^1.25.0
