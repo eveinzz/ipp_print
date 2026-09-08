@@ -74,11 +74,32 @@ void main() {
     r.group(0x02);
     r.attr(0x21, 'copies', _i32(options.copies));
     r.attr(0x44, 'media', _s(options.media));
-    r.attr(0x44, 'print-color-mode', _s(options.colorMode));
+    // colorMode 默认 null = 不下发 print-color-mode（RFC 8011 §5.2：
+    // 打印机用 print-color-mode-default）。
     r.attr(0x44, 'sides', _s(options.duplex));
     r.end();
 
     expect(actual, r.out.toBytes());
+  });
+
+  test('Print-Job：显式 colorMode 才下发 print-color-mode（回归锚点）', () {
+    final actual = IppCodec.buildPrintJob(
+      printerUri: 'ipp://p.local:631/ipp/print',
+      documentFormat: 'image/pwg-raster',
+      requestId: 1,
+      options: const PrintOptions(colorMode: 'color'),
+    );
+    final s = String.fromCharCodes(actual);
+    expect('print-color-mode'.allMatches(s), hasLength(1));
+    expect(s.contains('color'), isTrue);
+
+    // 默认（null）：报文中完全不含 print-color-mode。
+    final plain = IppCodec.buildPrintJob(
+      printerUri: 'ipp://p.local:631/ipp/print',
+      documentFormat: 'image/pwg-raster',
+      requestId: 2,
+    );
+    expect(String.fromCharCodes(plain).contains('print-color-mode'), isFalse);
   });
 
   test('Get-Printer-Attributes：requested-attributes 多值用零长度名', () {

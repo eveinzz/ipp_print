@@ -129,7 +129,7 @@ class PrintOptions {
   const PrintOptions({
     this.copies = 1,
     this.media = 'iso_a4_210x297mm',
-    this.colorMode = 'monochrome',
+    this.colorMode,
     this.duplex = 'one-sided',
   });
 
@@ -140,8 +140,15 @@ class PrintOptions {
   /// [PrinterInfo.mediaSupported]，否则打印机可能拒绝）。
   final String media;
 
-  /// 色彩模式（job 属性 `print-color-mode`：monochrome/color）。
-  final String colorMode;
+  /// 色彩模式（job 属性 `print-color-mode`）。
+  ///
+  /// null（默认）= **不下发该属性**，打印机使用自己的
+  /// `print-color-mode-default`（RFC 8011 job template 默认值语义，
+  /// PWG 5107.3/5100.13 §6.2.27；典型 default 为 `auto`，即按文档内容
+  /// 自动选彩色/单色）。显式指定时取值须为 `print-color-mode-supported`
+  /// 的成员（全集：auto/auto-monochrome/bi-level/color/highlight/
+  /// monochrome/process-bi-level/process-monochrome）。
+  final String? colorMode;
 
   /// 双面模式（job 属性 `sides`：one-sided/two-sided-long-edge 等）。
   final String duplex;

@@ -61,9 +61,14 @@ class IppCodec {
       ..attr(tagMime, 'document-format', documentFormat);
     b.group(tagJobGroup)
       ..attr(tagInteger, 'copies', options.copies)
-      ..attr(tagKeyword, 'media', options.media)
-      ..attr(tagKeyword, 'print-color-mode', options.colorMode)
-      ..attr(tagKeyword, 'sides', options.duplex);
+      ..attr(tagKeyword, 'media', options.media);
+    // print-color-mode：仅在客户端显式指定时下发；null = 不下发，
+    // 打印机使用自己的 print-color-mode-default（RFC 8011 §5.2 job
+    // template 默认值语义）。
+    if (options.colorMode != null) {
+      b.attr(tagKeyword, 'print-color-mode', options.colorMode!);
+    }
+    b.attr(tagKeyword, 'sides', options.duplex);
     return b.take();
   }
 

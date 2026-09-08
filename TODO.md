@@ -23,14 +23,22 @@
 - [ ] **分辨率 / 彩色 / 双面能力协商** —— 透出 `printer-resolution-supported`、
   `print-color-mode-supported`、`sides-supported` 作为宿主 UI 数据源
   （解除固定 300 dpi / sRGB-8 的限制）。
-- [ ] **彩色打印默认值** —— 真机验证（EPSON L3250 彩色机型）出纸为黑白。
-  代码级根因：`PrintOptions.colorMode` 默认 `'monochrome'`（models.dart），
-  经 `buildPrintJob` 以 job 属性 `print-color-mode` 显式下发，打印机遵照执行。
-  目标：支持彩色则默认彩色，仅单色则黑白。路径：`Get-Printer-Attributes` 增加
-  `print-color-mode-supported` 请求并解析（`color`/`auto`/`monochrome`），
-  默认策略 `含 color → color，含 auto → auto，否则 monochrome`
-  （IPP `print-color-mode` job template attribute，PWG 5107.3）；
-  `auto` 在入门机型上的实际行为需真机验证，禁止想当然。
+- [x] **彩色打印默认值（通用 IPP 语义，非单一机型）** ——
+  ✅ 已实施「不下发」方案：`PrintOptions.colorMode` 改为可空（null 默认），
+  null 时 `buildPrintJob` 不下发 `print-color-mode`，打印机使用自己的
+  `print-color-mode-default`（RFC 8011 §5.2；L3250 实测 default=auto）。
+  显式指定时才下发；回归锚点测试已固化。原根因：默认 `'monochrome'`
+  显式覆盖了打印机默认行为。
+  规范依据（PWG 5107.3/5100.13 §6.2.27，IANA 登记为 type2 keyword）：
+  取值全集 8 个：`auto` / `auto-monochrome` / `bi-level` / `color` /
+  `highlight` / `monochrome` / `process-bi-level` / `process-monochrome`；
+  `auto` = 打印机按文档内容自动选彩色/单色。
+  待办余项：若后续 UI 需要显式色彩选择，仅当 `print-color-mode-supported`
+  含该值时下发（能力只来自 IPP 确定性字段，禁止推断）。
+  样本数据（仅单一样本，不作为设计依据）：EPSON L3250 实测
+  `print-color-mode-default=auto`、`supported=[color, monochrome,
+  auto-monochrome, process-monochrome, auto]`、
+  `pwg-raster-document-type-supported=[sgray_8, srgb_8]`。
 - [ ] **TLS 正路径测试** —— 用 `HttpServer.bindSecure` 起自签 TLS 服务器，
   验证 `acceptSelfSignedTls` 的接受路径（现有测试只覆盖「连明文应握手失败」
   的负路径）。
