@@ -11,11 +11,29 @@ Headless IPP direct-printing kernel for Dart/Flutter: **printer discovery + dete
 
 ## Why this package exists
 
-A large class of inkjet printers (e.g. Epson's L-series tank printers) advertise IPP with `image/pwg-raster` support but **lack Apple's URF raster format**. On iOS, the system print panel (and therefore `printing`-style plugins) will never list such printers — users see an empty, unrecoverable printer list. This package fills that gap: the host app performs mDNS discovery, classifies each printer's capabilities from deterministic Bonjour TXT fields, and speaks IPP itself.
+A large class of inkjet printers (e.g. Epson's L-series tank printers) advertise IPP with `image/pwg-raster` support but **lack Apple's URF raster format**. On iOS, the system print panel (and therefore `printing`-style plugins) will never list such printers — users see an empty, unrecoverable printer list. This package fills that gap: the host app performs mDNS discovery, classifies each printer's capabilities from deterministic Bonjour TXT fields, and speaks IPP itself. **End-to-end paper output has been verified on real hardware (EPSON L3250, a pwg-raster-only tank printer).**
+
+## Discovery: one protocol, two transports
+
+The core protocol is **mDNS/DNS-SD (RFC 6762 / 6763)** on every platform; only the transport to it differs:
+
+- **iOS / macOS — native system Bonjour.** Since iOS 14, raw-socket multicast is silently filtered unless the app holds the `com.apple.developer.networking.multicast` entitlement, which Apple grants only by special request (Apple TN3179). Naive mDNS implementations therefore discover nothing on iOS — with no error. This package routes browsing through the system Bonjour framework (`NSNetServiceBrowser`): the `mDNSResponder` daemon does the multicasting, so only the standard Local Network permission prompt is required — no special entitlement. (Detail: `NSNetServiceBrowser` does not support the `_universal._sub._ipp._tcp` subtype; the `_ipp`/`_ipps` pair covers the same instances, deduplicated by UUID.)
+- **Android / Linux / Windows — `multicast_dns`** (raw UDP 5353). On Android the Wi-Fi stack filters multicast packets by default; the host app must acquire a `WifiManager.MulticastLock` (see the [official Android docs](https://developer.android.com/reference/android/net/wifi/WifiManager.MulticastLock)) or discovery will receive nothing.
+
+Routing is automatic (`defaultPlatformDiscovery()`); inject a custom `PrinterDiscovery` to override it.
+
+| Platform | Discovery transport | Requires from the host |
+|---|---|---|
+| iOS | Native Bonjour (`NSNetServiceBrowser`) | Local Network permission + `NSBonjourServices` in `Info.plist` |
+| macOS | Native Bonjour (`NSNetServiceBrowser`) | — |
+| Android | `multicast_dns` (UDP 5353) | `WifiManager.MulticastLock` |
+| Linux / Windows | `multicast_dns` (UDP 5353) | Firewall must allow UDP 5353 |
+
+Printing itself (IPP over HTTP/TLS) is pure Dart and identical on every platform.
 
 ## Features
 
-- **mDNS/DNS-SD discovery** — browses `_ipp._tcp`, `_ipps._tcp` and `_universal._sub._ipp._tcp`, resolves SRV/TXT/A records in parallel, deduplicates by printer UUID (RFC 6763 / PWG 5101.2).
+- **mDNS/DNS-SD discovery** — browses `_ipp._tcp`, `_ipps._tcp` and `_universal._sub._ipp._tcp`, resolves SRV/TXT/A records in parallel, deduplicates by printer UUID (RFC 6763 / PWG 5101.2). Platform-routed: native system Bonjour on iOS/macOS (see below), `multicast_dns` elsewhere.
 - **Deterministic capability classification** — from TXT records (`URF=` / `pdl=`), never guessed:
   - `airPrint` — has URF; hand over to the OS print panel.
   - `ippDirect` — no URF but `pdl` contains `image/pwg-raster`; printable via this package.
@@ -24,6 +42,14 @@ A large class of inkjet printers (e.g. Epson's L-series tank printers) advertise
 - **TLS transport** — printers advertising only `_ipps._tcp` are directly printable (`https://` endpoint, self-signed certificates accepted by default).
 - **PWG-raster encoder** (PWG 5102.4): 1796-octet `cups_page_header2_t` page header, file-level `RaS2` sync word (once per document), row groups (1-octet row repeat count, 1–256 rows) with pixel-granularity PackBits-like run-length encoding (sRGB-8, bpp=3) — validated byte-for-byte against the spec's §4.4.2 sample bitmap and CUPS `raster-stream.c`. Real-printer verified (EPSON L3250, end-to-end paper output).
 - **Pure Dart, zero Flutter dependencies** — the protocol core is unit-testable offline; PDF rasterization is injected through the `PdfRasterizer` port (e.g. backed by `printing`'s `rasterPdf`).
+
+### How this compares with `printing`
+
+| | OS print panel (via `printing`) | ipp_print |
+|---|---|---|
+| AirPrint (URF) printers | ✅ listed | classified `airPrint` → handed to the panel |
+| pwg-raster-only printers (no URF) | ❌ never listed | ✅ direct IPP printing |
+| UI | system print panel | none — headless API, host owns the UX |
 
 ## How it works
 
@@ -85,6 +111,17 @@ if (status == PrinterProbeStatus.ready) {
   }
 }
 ```
+
+### Job options
+
+`printPdf` accepts a `PrintOptions`:
+
+| Field | Default | IPP job attribute | Notes |
+|---|---|---|---|
+| `copies` | `1` | `copies` | integer |
+| `media` | `iso_a4_210x297mm` | `media` | PWG self-describing name; should come from the printer's `media-supported` |
+| `duplex` | `one-sided` | `sides` | `one-sided` / `two-sided-long-edge` / `two-sided-short-edge` |
+| `colorMode` | `null` | `print-color-mode` | **`null` = attribute omitted** → the printer applies its own `print-color-mode-default` per RFC 8011 (typically `auto`: color for color pages, grayscale otherwise). Explicit values (`color` / `monochrome`, …) are sent as-is and should be a member of the printer's `print-color-mode-supported` (full value set: PWG 5107.3 §6.2.27). |
 
 ### iOS host requirements
 

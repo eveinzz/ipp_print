@@ -11,11 +11,29 @@
 
 ## 这个包为什么存在
 
-一大类喷墨打印机（如爱普生 L 系列墨仓机）在广播中声明支持 `image/pwg-raster`，但**缺少 Apple 的 URF 光栅格式**。在 iOS 上，系统打印面板（以及 `printing` 这类依赖系统面板的插件）永远不会列出这类打印机——用户面对的是无法恢复的空白列表。本包填补该空洞：由宿主 App 自行完成 mDNS 发现、基于确定性 Bonjour TXT 字段的能力分类，以及 IPP 传输。
+一大类喷墨打印机（如爱普生 L 系列墨仓机）在广播中声明支持 `image/pwg-raster`，但**缺少 Apple 的 URF 光栅格式**。在 iOS 上，系统打印面板（以及 `printing` 这类依赖系统面板的插件）永远不会列出这类打印机——用户面对的是无法恢复的空白列表。本包填补该空洞：由宿主 App 自行完成 mDNS 发现、基于确定性 Bonjour TXT 字段的能力分类，以及 IPP 传输。**真机端到端出纸已验证通过（EPSON L3250，仅广播 pwg-raster 的墨仓机）。**
+
+## 发现：一个协议，两条传输路径
+
+核心协议在任何平台都是 **mDNS/DNS-SD（RFC 6762 / 6763）**，不同的只是抵达组播层的通道：
+
+- **iOS / macOS —— 原生系统 Bonjour。** 自 iOS 14 起，裸 socket 组播流量会被系统**静默过滤**，除非 App 持有 `com.apple.developer.networking.multicast` 特批 entitlement（Apple 仅按申请特批，见 TN3179）。朴素的 mDNS 实现在 iOS 上因此 0 发现——且无任何报错。本包改走系统 Bonjour 框架（`NSNetServiceBrowser`）：组播由 `mDNSResponder` 守护进程代收，豁免该权限，只需标准的「本地网络」授权弹窗——无需任何特殊 entitlement。（细节：`NSNetServiceBrowser` 不支持 `_universal._sub._ipp._tcp` 子类型；`_ipp`/`_ipps` 双广播已覆盖相同实例，按 UUID 去重。）
+- **Android / Linux / Windows —— `multicast_dns`**（裸 UDP 5353）。Android 的 Wi-Fi 栈默认过滤组播包，宿主 App 必须持有 `WifiManager.MulticastLock`（见 [Android 官方文档](https://developer.android.com/reference/android/net/wifi/WifiManager.MulticastLock)），否则发现层收不到任何响应。
+
+平台路由自动完成（`defaultPlatformDiscovery()`）；注入自定义 `PrinterDiscovery` 即可覆盖。
+
+| 平台 | 发现通道 | 宿主需提供 |
+|---|---|---|
+| iOS | 原生 Bonjour（`NSNetServiceBrowser`） | 本地网络授权 + `Info.plist` 声明 `NSBonjourServices` |
+| macOS | 原生 Bonjour（`NSNetServiceBrowser`） | — |
+| Android | `multicast_dns`（UDP 5353） | `WifiManager.MulticastLock` |
+| Linux / Windows | `multicast_dns`（UDP 5353） | 防火墙放行 UDP 5353 |
+
+打印传输本身（IPP over HTTP/TLS）为纯 Dart，全平台一致。
 
 ## 特性
 
-- **mDNS/DNS-SD 发现** —— 浏览 `_ipp._tcp`、`_ipps._tcp` 与 `_universal._sub._ipp._tcp`，SRV/TXT/A 记录并行解析，按打印机 UUID 去重（RFC 6763 / PWG 5101.2）。
+- **mDNS/DNS-SD 发现** —— 浏览 `_ipp._tcp`、`_ipps._tcp` 与 `_universal._sub._ipp._tcp`，SRV/TXT/A 记录并行解析，按打印机 UUID 去重（RFC 6763 / PWG 5101.2）。平台路由：Apple 平台走原生系统 Bonjour（见下节），其余平台走 `multicast_dns`。
 - **确定性能力分类** —— 全部来自 TXT 记录（`URF=` / `pdl=`），绝不猜测：
   - `airPrint` —— 有 URF；交还系统打印面板。
   - `ippDirect` —— 无 URF 但 `pdl` 含 `image/pwg-raster`；可由本包直连打印。
@@ -24,6 +42,14 @@
 - **TLS 传输** —— 仅广播 `_ipps._tcp` 的机型可直接打印（`https://` 端点，默认接受自签证书）。
 - **PWG-raster 编码器**（PWG 5102.4）：1796 字节 `cups_page_header2_t` 页头 + 文件级 `RaS2` 同步字（每文档一次）+ 行组（1 字节行重复计数，1–256 行）+ 像素粒度 PackBits-like 游程编码（sRGB-8，bpp=3）—— 与规范 §4.4.2 样本位图及 CUPS `raster-stream.c` 逐字节比对验证；真机出纸验证通过（EPSON L3250）。
 - **纯 Dart，零 Flutter 依赖** —— 协议核心可离线单测；PDF 栅格化通过 `PdfRasterizer` 端口注入（例如由 `printing` 的 `rasterPdf` 实现）。
+
+### 与 `printing` 的对比
+
+| | 系统打印面板（经 `printing`） | ipp_print |
+|---|---|---|
+| AirPrint（有 URF）机型 | ✅ 可列出 | 分类为 `airPrint` → 交还系统面板 |
+| 仅 pwg-raster（无 URF）机型 | ❌ 永远不可见 | ✅ IPP 直连打印 |
+| UI | 系统打印面板 | 无——无界面 API，交互由宿主掌控 |
 
 ## 工作原理
 
@@ -85,6 +111,17 @@ if (status == PrinterProbeStatus.ready) {
   }
 }
 ```
+
+### 作业选项
+
+`printPdf` 可传 `PrintOptions`：
+
+| 字段 | 默认值 | 对应 IPP 作业属性 | 说明 |
+|---|---|---|---|
+| `copies` | `1` | `copies` | 份数 |
+| `media` | `iso_a4_210x297mm` | `media` | PWG 自描述介质名；应取自打印机 `media-supported` |
+| `duplex` | `one-sided` | `sides` | `one-sided` / `two-sided-long-edge` / `two-sided-short-edge` |
+| `colorMode` | `null` | `print-color-mode` | **`null` = 不下发该属性** → 打印机按 RFC 8011 使用自己的 `print-color-mode-default`（典型为 `auto`：彩色页自动彩打、其余自动单色）。显式指定（`color` / `monochrome` 等）则原样下发，取值应为打印机 `print-color-mode-supported` 的成员（全集见 PWG 5107.3 §6.2.27）。 |
 
 ### iOS 宿主配置
 
