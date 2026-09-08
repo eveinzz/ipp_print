@@ -173,11 +173,14 @@ abstract class PdfRasterizer {
 
 /// 打印进度事件。
 class PrintProgress {
-  const PrintProgress(this.stage, {this.page, this.pageCount});
+  const PrintProgress(this.stage, {this.page, this.pageCount, this.jobId});
 
   final PrintStage stage;
   final int? page;
   final int? pageCount;
+
+  /// IPP 作业号（`waitingPrinter` / `done` 阶段可用，供宿主取消作业）。
+  final int? jobId;
 }
 
 enum PrintStage { rasterizing, encoding, sending, waitingPrinter, done }

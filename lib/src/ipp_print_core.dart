@@ -102,7 +102,7 @@ class IppPrint {
       options: options,
       jobName: 'ipp_print-document',
     );
-    yield const PrintProgress(PrintStage.waitingPrinter);
+    yield PrintProgress(PrintStage.waitingPrinter, jobId: jobId);
     final state = await _client.waitForTerminalState(
       printer,
       jobId,
@@ -111,7 +111,7 @@ class IppPrint {
     if (state != IppJobState.completed) {
       throw IppPrintException('job $jobId ended as ${state.name}');
     }
-    yield PrintProgress(PrintStage.done, pageCount: pageNo);
+    yield PrintProgress(PrintStage.done, pageCount: pageNo, jobId: jobId);
   }
 
   /// 取消指定作业（透传 [IppClient.cancelJob]）。
