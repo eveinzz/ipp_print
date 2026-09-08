@@ -2,6 +2,11 @@
 
 English | [简体中文](README.zh-CN.md)
 
+![License: MIT](https://img.shields.io/badge/license-MIT-blue)
+![Dart SDK](https://img.shields.io/badge/Dart-%5E3.4-0175C2?logo=dart&logoColor=white)
+![Protocol](https://img.shields.io/badge/protocol-IPP%201.1%20(RFC%208011)-green)
+![Tests](https://img.shields.io/badge/tests-56%20passing-brightgreen)
+
 Headless IPP direct-printing kernel for Dart/Flutter: **printer discovery + deterministic capability classification + IPP Print-Job transport** with PWG-raster encoding. No UI by design — presentation and interaction are left to the host app.
 
 ## Why this package exists
@@ -19,6 +24,25 @@ A large class of inkjet printers (e.g. Epson's L-series tank printers) advertise
 - **TLS transport** — printers advertising only `_ipps._tcp` are directly printable (`https://` endpoint, self-signed certificates accepted by default).
 - **PWG-raster encoder** (PWG 5102.4): 36-byte RaS2 header, run-length rows, sRGB-8 — validated by golden-byte tests.
 - **Pure Dart, zero Flutter dependencies** — the protocol core is unit-testable offline; PDF rasterization is injected through the `PdfRasterizer` port (e.g. backed by `printing`'s `rasterPdf`).
+
+## How it works
+
+```mermaid
+flowchart TB
+    A["_ipp._tcp / _ipps._tcp / _universal._sub._ipp._tcp (mDNS browse)"]
+      --> B["RecordAssembler<br/>resolve SRV / TXT / A records<br/>deduplicate by printer UUID"]
+    B --> C{"Capability classification<br/>from TXT: URF= / pdl="}
+    C -->|"URF present"| D["airPrint<br/>hand over to the OS print panel"]
+    C -->|"pdl contains image/pwg-raster"| E["ippDirect<br/>printable by this package"]
+    C -->|"vendor formats only"| F["vendorOnly<br/>guide user to vendor app"]
+    subgraph P["IPP direct pipeline"]
+      E --> G["probe: Get-Printer-Attributes<br/>(media / color / state)"]
+      G --> H["PDF raster pages<br/>(host-injected PdfRasterizer)"]
+      H --> I["PWG-raster encoding<br/>(PWG 5102.4)"]
+      I --> J["IPP Print-Job<br/>ipp:// or ipps:// (TLS)"]
+      J --> K["job lifecycle:<br/>state polling / Get-Jobs / Cancel-Job"]
+    end
+```
 
 ## Install
 

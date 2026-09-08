@@ -2,6 +2,11 @@
 
 [English](README.md) | 简体中文
 
+![License: MIT](https://img.shields.io/badge/license-MIT-blue)
+![Dart SDK](https://img.shields.io/badge/Dart-%5E3.4-0175C2?logo=dart&logoColor=white)
+![Protocol](https://img.shields.io/badge/protocol-IPP%201.1%20(RFC%208011)-green)
+![Tests](https://img.shields.io/badge/tests-56%20passing-brightgreen)
+
 面向 Dart/Flutter 的无界面 IPP 直连打印内核：**打印机发现 + 确定性能力分类 + IPP Print-Job 传输**，含 PWG-raster 编码。刻意不含 UI——展示与交互全部留给宿主 App。
 
 ## 这个包为什么存在
@@ -19,6 +24,25 @@
 - **TLS 传输** —— 仅广播 `_ipps._tcp` 的机型可直接打印（`https://` 端点，默认接受自签证书）。
 - **PWG-raster 编码器**（PWG 5102.4）：36 字节 RaS2 页头 + 行程编码行，sRGB-8 —— 由金标字节测试锚定。
 - **纯 Dart，零 Flutter 依赖** —— 协议核心可离线单测；PDF 栅格化通过 `PdfRasterizer` 端口注入（例如由 `printing` 的 `rasterPdf` 实现）。
+
+## 工作原理
+
+```mermaid
+flowchart TB
+    A["_ipp._tcp / _ipps._tcp / _universal._sub._ipp._tcp（mDNS 浏览）"]
+      --> B["RecordAssembler<br/>解析 SRV / TXT / A 记录<br/>按打印机 UUID 去重"]
+    B --> C{"能力分类<br/>依据 TXT：URF= / pdl="}
+    C -->|"有 URF"| D["airPrint<br/>交还系统打印面板"]
+    C -->|"pdl 含 image/pwg-raster"| E["ippDirect<br/>可由本包直连打印"]
+    C -->|"仅厂商私有格式"| F["vendorOnly<br/>引导用户使用厂商 App"]
+    subgraph P["IPP 直连管线"]
+      E --> G["probe：Get-Printer-Attributes<br/>（介质 / 色彩 / 状态）"]
+      G --> H["PDF 栅格页<br/>（宿主注入的 PdfRasterizer）"]
+      H --> I["PWG-raster 编码<br/>（PWG 5102.4）"]
+      I --> J["IPP Print-Job<br/>ipp:// 或 ipps://（TLS）"]
+      J --> K["作业生命周期：<br/>状态轮询 / Get-Jobs / Cancel-Job"]
+    end
+```
 
 ## 安装
 
