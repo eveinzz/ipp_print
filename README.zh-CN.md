@@ -15,7 +15,8 @@
   - `airPrint` —— 有 URF；交还系统打印面板。
   - `ippDirect` —— 无 URF 但 `pdl` 含 `image/pwg-raster`；可由本包直连打印。
   - `vendorOnly` —— 仅厂商私有格式；引导用户使用厂商 App。
-- **IPP 1.1 客户端**（RFC 2910 / RFC 8011）：`Get-Printer-Attributes`、`Print-Job`、`Get-Job-Attributes`；作业状态轮询带瞬态故障容错。
+- **IPP 1.1 客户端**（RFC 2910 / RFC 8011）：`Print-Job`、`Get-Printer-Attributes`、`Get-Job-Attributes`、`Get-Jobs`、`Cancel-Job`；作业状态轮询带瞬态故障容错。
+- **TLS 传输** —— 仅广播 `_ipps._tcp` 的机型可直接打印（`https://` 端点，默认接受自签证书）。
 - **PWG-raster 编码器**（PWG 5102.4）：36 字节 RaS2 页头 + 行程编码行，sRGB-8 —— 由金标字节测试锚定。
 - **纯 Dart，零 Flutter 依赖** —— 协议核心可离线单测；PDF 栅格化通过 `PdfRasterizer` 端口注入（例如由 `printing` 的 `rasterPdf` 实现）。
 
@@ -104,7 +105,7 @@ Apple TN3179。HP 官方 [jipp](https://github.com/HPInc/jipp) 与 istopwg 指�
 ## 边界（诚实清单）
 
 1. **仅限 mDNS 广播设备** —— USB 直连、离线、不发广播的打印机不可见（与系统打印面板同限）。
-2. **明文 `ipp://:631` 传输** —— 仅广播 `_ipps`（无 `_ipp`）的机型暂不可用；自签 TLS 证书校验问题暂未处理（见 Roadmap）。
+2. **TLS 默认接受自签证书** —— 打印机证书普遍为自签；`ipps://` 通道校验加密但不校验身份（严格模式可用 `IppClient(acceptSelfSignedTls: false)`）。
 3. **不支持 PDF 直投** —— 直连打印要求打印机在 `pdl` 中声明 `image/pwg-raster`（分类器保证不会误投）。
 4. **固定 300 dpi / sRGB-8** —— 分辨率/色彩协商尚未实现（不发送 `printer-resolution`）。
 5. **不接管 AirPrint 机型** —— 分类为 `airPrint` 的设备交还系统打印面板。

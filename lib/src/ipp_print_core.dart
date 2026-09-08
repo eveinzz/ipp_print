@@ -113,4 +113,22 @@ class IppPrint {
     }
     yield PrintProgress(PrintStage.done, pageCount: pageNo);
   }
+
+  /// 取消指定作业（透传 [IppClient.cancelJob]）。
+  Future<void> cancelJob(DiscoveredPrinter printer, int jobId) =>
+      _client.cancelJob(printer, jobId);
+
+  /// 查询作业队列（透传 [IppClient.getJobs]，参数语义见其文档）。
+  Future<List<IppJobSummary>> getJobs(
+    DiscoveredPrinter printer, {
+    bool myJobs = false,
+    String whichJobs = 'not-completed',
+    List<String>? requestedAttributes,
+  }) =>
+      _client.getJobs(
+        printer,
+        myJobs: myJobs,
+        whichJobs: whichJobs,
+        requestedAttributes: requestedAttributes,
+      );
 }

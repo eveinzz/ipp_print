@@ -80,12 +80,14 @@ class FakeIppServer {
   }
 
   /// 按 IPP operation-id 路由：Print-Job / Get-Printer-Attributes /
-  /// Get-Job-Attributes。
+  /// Get-Job-Attributes / Cancel-Job / Get-Jobs。
   List<int> _respond(Uint8List request) {
     final op = (request[2] << 8) | request[3];
     final ipp = switch (op) {
       IppCodec.opPrintJob => _printJobResponse(),
       IppCodec.opGetPrinterAttributes => _printerAttributesResponse(),
+      IppCodec.opCancelJob => _cancelJobResponse(),
+      IppCodec.opGetJobs => _getJobsResponse(),
       _ => _jobStateResponse(),
     };
     final head = 'HTTP/1.1 200 OK\r\n'
@@ -151,14 +153,39 @@ Uint8List _jobStateResponse() => _wrap(
       _attr(0x21, 'job-id', _i32(42)) + _attr(0x23, 'job-state', _i32(9)),
     );
 
+/// Cancel-Job 成功响应：仅 operation 组（无 job 组返回）。
+Uint8List _cancelJobResponse() => _wrap(0, [0x02], const <int>[]);
+
+/// Get-Jobs 成功响应：两个作业组（模拟队列中两笔作业）。
+Uint8List _getJobsResponse() {
+  final b = BytesBuilder()
+    ..add([0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 7])
+    ..addByte(0x01)
+    ..add(_attr(0x47, 'attributes-charset', _s('utf-8')))
+    ..add(_attr(0x48, 'attributes-natural-language', _s('en')));
+  void job(int id, int state, String name, String user) {
+    b..addByte(0x02)
+      ..add(_attr(0x21, 'job-id', _i32(id)))
+      ..add(_attr(0x23, 'job-state', _i32(state)))
+      ..add(_attr(0x42, 'job-name', _s(name)))
+      ..add(_attr(0x42, 'job-originating-user-name', _s(user)));
+  }
+
+  job(42, 5, 'doc-a', 'alice');
+  job(43, 9, 'doc-b', 'bob');
+  b.addByte(0x03);
+  return b.toBytes();
+}
+
 void main() {
   late FakeIppServer server;
   late IppClient client;
   late DiscoveredPrinter printer;
+  late int port;
 
   setUp(() async {
     server = FakeIppServer();
-    final port = await server.start();
+    port = await server.start();
     client = IppClient();
     printer = DiscoveredPrinter(
       name: 'EPSON L3250 Series',
@@ -232,6 +259,68 @@ void main() {
       throwsA(isA<IppPrintException>()),
     );
   });
+
+  test('cancelJob：发送 0x0008 请求且包含 job-id，成功后静默返回', () async {
+    await client.cancelJob(printer, 42);
+    final req = server.requests.single;
+    expect(req[2] << 8 | req[3], IppCodec.opCancelJob);
+    // 请求体含 job-id=42（integer 属性值）
+    final s = String.fromCharCodes(req);
+    expect(s.contains('job-id'), isTrue);
+    expect(req, contains(42)); // _i32(42) 出现在报文中
+  });
+
+  test('cancelJob：作业不存在（client-error-not-found）→ IppStatusException',
+      () async {
+    server.enqueueHttp(
+      _httpResponse(_wrap(0x0406, [0x02], const <int>[])),
+    );
+    await expectLater(
+      client.cancelJob(printer, 999),
+      throwsA(isA<IppStatusException>()),
+    );
+  });
+
+  test('getJobs：解析两个作业组为摘要列表', () async {
+    final jobs = await client.getJobs(printer);
+    expect(jobs, hasLength(2));
+    expect(jobs[0].jobId, 42);
+    expect(jobs[0].jobState, IppJobState.processing);
+    expect(jobs[0].jobName, 'doc-a');
+    expect(jobs[0].userName, 'alice');
+    expect(jobs[1].jobId, 43);
+    expect(jobs[1].jobState, IppJobState.completed);
+    expect(jobs[1].jobName, 'doc-b');
+    // 请求应携带 Get-Jobs 操作码（0x000A）
+    expect(server.requests.single[2] << 8 | server.requests.single[3],
+        IppCodec.opGetJobs);
+  });
+
+  test('secure 打印机走 https 端点（ipps）——连接本地明文服务器应握手失败',
+      () async {
+    final securePrinter = DiscoveredPrinter(
+      name: 'x',
+      host: '127.0.0.1',
+      port: port,
+      resourcePath: '/ipp/print',
+      secure: true,
+    );
+    // https 连明文端口 → TLS 握手层异常（绝不能按 IPP 明文解析成功）。
+    await expectLater(
+      client.getPrinterAttributes(securePrinter),
+      throwsA(isA<Exception>()),
+    );
+  });
+}
+
+List<int> _httpResponse(List<int> ippBody) {
+  const head = 'HTTP/1.1 200 OK\r\n'
+      'Content-Type: application/ipp\r\n'
+      'Content-Length: ';
+  return [
+    ...'$head${ippBody.length}\r\nConnection: close\r\n\r\n'.codeUnits,
+    ...ippBody,
+  ];
 }
 
 // _ippResponse 保留占位避免 lint unused —— 实际未被引用，删除。

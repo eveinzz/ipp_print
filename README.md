@@ -15,7 +15,8 @@ A large class of inkjet printers (e.g. Epson's L-series tank printers) advertise
   - `airPrint` — has URF; hand over to the OS print panel.
   - `ippDirect` — no URF but `pdl` contains `image/pwg-raster`; printable via this package.
   - `vendorOnly` — vendor-private formats only; guide the user to a vendor app.
-- **IPP 1.1 client** (RFC 2910 / RFC 8011): `Get-Printer-Attributes`, `Print-Job`, `Get-Job-Attributes`; job-state polling with transient-fault tolerance.
+- **IPP 1.1 client** (RFC 2910 / RFC 8011): `Print-Job`, `Get-Printer-Attributes`, `Get-Job-Attributes`, `Get-Jobs`, `Cancel-Job`; job-state polling with transient-fault tolerance.
+- **TLS transport** — printers advertising only `_ipps._tcp` are directly printable (`https://` endpoint, self-signed certificates accepted by default).
 - **PWG-raster encoder** (PWG 5102.4): 36-byte RaS2 header, run-length rows, sRGB-8 — validated by golden-byte tests.
 - **Pure Dart, zero Flutter dependencies** — the protocol core is unit-testable offline; PDF rasterization is injected through the `PdfRasterizer` port (e.g. backed by `printing`'s `rasterPdf`).
 
@@ -104,7 +105,7 @@ serve as capability checklists.
 ## Limitations
 
 1. **mDNS-broadcasting devices only** — USB-connected, offline, or non-broadcasting printers are invisible (same as the OS print panel).
-2. **Plaintext `ipp://:631` transport** — printers advertising only `_ipps` (no `_ipp`) are not usable yet; self-signed TLS validation is avoided (see Roadmap).
+2. **Self-signed TLS accepted by default** — printer certificates are self-signed as a rule; the `ipps://` channel validates encryption but not identity (strict mode via `IppClient(acceptSelfSignedTls: false)`).
 3. **No PDF direct-send** — direct printing requires the printer to declare `image/pwg-raster` in `pdl` (the classifier guarantees no misdirected jobs).
 4. **Fixed 300 dpi / sRGB-8** — resolution/color negotiation is not implemented yet (`printer-resolution` is not sent).
 5. **AirPrint-class printers are not intercepted** — devices classified as `airPrint` are handed to the OS print panel.

@@ -52,6 +52,7 @@ class InstanceRecords {
     this.srvPort,
     this.txtRaw,
     this.ipv4,
+    this.secure = false,
   });
 
   final String instanceName;
@@ -59,6 +60,9 @@ class InstanceRecords {
   final int? srvPort;
   final List<int>? txtRaw;
   final InternetAddress? ipv4;
+
+  /// 该实例是否来自 `_ipps._tcp` 广播（决定传输通道与逻辑 scheme）。
+  final bool secure;
 }
 
 /// 纯函数组装器：把同实例的 PTR/SRV/TXT/A 记录组装配为 [DiscoveredPrinter]。
@@ -89,6 +93,7 @@ class RecordAssembler {
       port: port,
       resourcePath: rp.startsWith('/') ? rp : '/$rp',
       uuid: txt['uuid'],
+      secure: r.secure,
       txt: txt,
     );
   }

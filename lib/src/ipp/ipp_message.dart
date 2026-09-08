@@ -31,9 +31,14 @@ class IppCodec {
   static const int tagLanguage = 0x48;
   static const int tagMime = 0x49;
 
-  // operations
+  // operations（IANA IPP Operations 注册表；枚举值由 RFC 8011 §5.4.15
+  // operations-supported 定义，与 CUPS cups/ipp.h 逐值对照核实：
+  // Print-Job 0x0002 起、Cancel-Job 0x0008、Get-Job-Attributes 0x0009、
+  // Get-Jobs 0x000A、Get-Printer-Attributes 0x000B）。
   static const int opPrintJob = 0x0002;
-  static const int opGetJobAttributes = 0x000A;
+  static const int opCancelJob = 0x0008;
+  static const int opGetJobAttributes = 0x0009;
+  static const int opGetJobs = 0x000A;
   static const int opGetPrinterAttributes = 0x000B;
 
   /// 生成 Print-Job 请求头（文档数据由调用方直接追加在尾部）。
@@ -94,6 +99,47 @@ class IppCodec {
       ..attr(tagUri, 'printer-uri', printerUri.toString())
       ..attr(tagName, 'requesting-user-name', 'ipp_print')
       ..attr(tagInteger, 'job-id', jobId);
+    return b.take();
+  }
+
+  /// Cancel-Job（RFC 8011 §4.3.3 / IPP Guide Appendix A：job-id 必需）。
+  static Uint8List buildCancelJob({
+    required String printerUri,
+    required int jobId,
+    required int requestId,
+    String userName = 'ipp_print',
+  }) {
+    final b = _Builder(opCancelJob, requestId)
+      ..attr(tagCharset, 'attributes-charset', 'utf-8')
+      ..attr(tagLanguage, 'attributes-natural-language', 'en')
+      ..attr(tagUri, 'printer-uri', printerUri.toString())
+      ..attr(tagName, 'requesting-user-name', userName)
+      ..attr(tagInteger, 'job-id', jobId);
+    return b.take();
+  }
+
+  /// Get-Jobs（RFC 8011 §4.2.6 / IPP Guide Appendix A：可选 my-jobs
+  /// (boolean)、which-jobs (keyword)、requested-attributes (1setOf keyword)）。
+  static Uint8List buildGetJobs({
+    required String printerUri,
+    required int requestId,
+    String userName = 'ipp_print',
+    bool myJobs = false,
+    String whichJobs = 'not-completed',
+    List<String>? requestedAttributes,
+  }) {
+    final b = _Builder(opGetJobs, requestId)
+      ..attr(tagCharset, 'attributes-charset', 'utf-8')
+      ..attr(tagLanguage, 'attributes-natural-language', 'en')
+      ..attr(tagUri, 'printer-uri', printerUri.toString())
+      ..attr(tagName, 'requesting-user-name', userName)
+      ..attr(tagBoolean, 'my-jobs', myJobs)
+      ..attr(tagKeyword, 'which-jobs', whichJobs);
+    if (requestedAttributes != null) {
+      for (final name in requestedAttributes) {
+        b.attrOrValue(tagKeyword, 'requested-attributes', name);
+      }
+    }
     return b.take();
   }
 
@@ -270,7 +316,10 @@ class _Builder {
 
   void _writeValue(Object value, {required bool asInteger}) {
     final Uint8List vb;
-    if (asInteger && value is int) {
+    if (value is bool) {
+      // RFC 8011 §5.1.22：boolean 值恒 1 字节（0x00/0x01）。
+      vb = Uint8List(1)..[0] = value ? 1 : 0;
+    } else if (asInteger && value is int) {
       vb = Uint8List(4)
         ..buffer.asByteData().setInt32(0, value, Endian.big);
     } else {

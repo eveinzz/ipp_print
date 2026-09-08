@@ -5,10 +5,14 @@
 
 ## P1
 
-- [ ] **`ipps://`（TLS）传输** —— 支持「仅广播 `_ipps._tcp`（无 `_ipp._tcp`）」的机型直连，
+- [x] **`ipps://`（TLS）传输** —— 支持「仅广播 `_ipps._tcp`（无 `_ipp._tcp`）」的机型直连，
   含自签证书策略。依据：IPP Guide Ch.1（HTTPS 即加密通道）。对应 README 边界 2。
-- [ ] **`Cancel-Job` / `Get-Jobs`** —— 作业管理操作
+  ✅ 0.1.0：`DiscoveredPrinter.secure` + `IppClient(acceptSelfSignedTls)`，
+  同 UUID 双广播去重保留明文实例。
+- [x] **`Cancel-Job` / `Get-Jobs`** —— 作业管理操作
   （IPP Guide Appendix A：job-id + requesting-user-name）。
+  ✅ 0.1.0：`IppClient.cancelJob/getJobs` + `IppJobSummary`；实施中修复
+  Get-Job-Attributes 操作码错写为 0x000A 的协议 Bug（正解 0x0009）。
 
 ## P2
 

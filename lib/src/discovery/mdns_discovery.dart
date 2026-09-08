@@ -37,10 +37,19 @@ class MDnsPrinterDiscovery implements PrinterDiscovery {
           ResourceRecordQuery.serverPointer(serviceType),
           timeout: timeout,
         )) {
-          final printer =
-              await _resolveInstance(client, ptr.domainName, timeout);
+          final printer = await _resolveInstance(
+            client,
+            ptr.domainName,
+            timeout,
+            secure: serviceType == '_ipps._tcp.local',
+          );
           if (printer == null) continue;
-          printers[printer.identity] = printer;
+          // 去重偏好：同一 UUID 双广播（_ipp + _ipps）时保留明文实例，
+          // 避免不必要的 TLS 开销与自签证书问题（RFC 6763 同名服务合并）。
+          final existing = printers[printer.identity];
+          if (existing == null || (existing.secure && !printer.secure)) {
+            printers[printer.identity] = printer;
+          }
         }
       }
     } finally {
@@ -52,8 +61,9 @@ class MDnsPrinterDiscovery implements PrinterDiscovery {
   Future<DiscoveredPrinter?> _resolveInstance(
     MDnsClient client,
     String fullName,
-    Duration timeout,
-  ) async {
+    Duration timeout, {
+    bool secure = false,
+  }) async {
     // SRV 与 TXT 并行查询（A 记录依赖 SRV target，只能在其后）。
     final srvFuture = _first<SrvResourceRecord>(
       client.lookup<SrvResourceRecord>(
@@ -87,6 +97,7 @@ class MDnsPrinterDiscovery implements PrinterDiscovery {
         srvPort: srv.port,
         txtRaw: txt?.text.codeUnits,
         ipv4: ip?.address,
+        secure: secure,
       ),
     );
   }

@@ -96,6 +96,69 @@ void main() {
     expect(actual[3], 0x0B);
   });
 
+  test('operation-id 回归锚点：Get-Job-Attributes=0x0009 ≠ Get-Jobs=0x000A'
+      '（历史 Bug：两者曾混淆，实际发送了 Get-Jobs 操作码）', () {
+    expect(IppCodec.opPrintJob, 0x0002);
+    expect(IppCodec.opCancelJob, 0x0008);
+    expect(IppCodec.opGetJobAttributes, 0x0009);
+    expect(IppCodec.opGetJobs, 0x000A);
+    expect(IppCodec.opGetPrinterAttributes, 0x000B);
+    // Get-Job-Attributes 请求头部必须携带 0x0009
+    final req = IppCodec.buildGetJobAttributes(
+      printerUri: 'ipp://p.local:631/ipp/print',
+      jobId: 1,
+      requestId: 1,
+    );
+    expect(req[3], 0x09);
+  });
+
+  test('Cancel-Job 请求金标：与独立参照实现逐字节一致', () {
+    final actual = IppCodec.buildCancelJob(
+      printerUri: 'ipps://EPSONBCAA32.local:631/ipp/print',
+      jobId: 42,
+      requestId: 9,
+    );
+
+    final r = RefWriter();
+    r.out.add(r.head(IppCodec.opCancelJob, 9));
+    r.group(0x01);
+    r.attr(0x47, 'attributes-charset', _s('utf-8'));
+    r.attr(0x48, 'attributes-natural-language', _s('en'));
+    r.attr(0x45, 'printer-uri',
+        _s('ipps://EPSONBCAA32.local:631/ipp/print'));
+    r.attr(0x42, 'requesting-user-name', _s('ipp_print'));
+    // IPP Guide Appendix A：Cancel-Job 必需 job-id (integer)。
+    r.attr(0x21, 'job-id', _i32(42));
+    r.end();
+
+    expect(actual, r.out.toBytes());
+  });
+
+  test('Get-Jobs 请求金标：boolean 单字节 + keyword + 多值 requested', () {
+    final actual = IppCodec.buildGetJobs(
+      printerUri: 'ipp://p.local:631/ipp/print',
+      requestId: 3,
+      myJobs: true,
+      whichJobs: 'completed',
+      requestedAttributes: const ['job-id', 'job-state'],
+    );
+
+    final r = RefWriter();
+    r.out.add(r.head(IppCodec.opGetJobs, 3));
+    r.group(0x01);
+    r.attr(0x47, 'attributes-charset', _s('utf-8'));
+    r.attr(0x48, 'attributes-natural-language', _s('en'));
+    r.attr(0x45, 'printer-uri', _s('ipp://p.local:631/ipp/print'));
+    r.attr(0x42, 'requesting-user-name', _s('ipp_print'));
+    r.attr(0x22, 'my-jobs', [0x01]); // RFC 8011 §5.1.22：boolean 恒 1 字节
+    r.attr(0x44, 'which-jobs', _s('completed'));
+    r.attr(0x44, 'requested-attributes', _s('job-id'));
+    r.additionalValue(0x44, _s('job-state'));
+    r.end();
+
+    expect(actual, r.out.toBytes());
+  });
+
   test('parseResponse：解析状态码、组、多值属性与 enum/integer', () {
     // 手工构造响应头（status successful-ok，requestId 0x1234）
     final resp = BytesBuilder()

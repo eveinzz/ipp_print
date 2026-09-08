@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- TLS transport (`ipps://`): printers advertising only `_ipps._tcp` are now
+  directly printable; `DiscoveredPrinter.secure` selects the logical
+  `ipps://` URI and the `https://` endpoint; self-signed certificates are
+  accepted by default (`IppClient(acceptSelfSignedTls:)`), and discovery
+  deduplication prefers the plaintext instance when a printer advertises
+  both `_ipp._tcp` and `_ipps._tcp`.
+- Job management: `Cancel-Job` (`IppClient.cancelJob`) and `Get-Jobs`
+  (`IppClient.getJobs` → `List<IppJobSummary>`), exposed on the `IppPrint`
+  facade, with boolean value encoding per RFC 8011 §5.1.22.
+
+### Fixed
+
+- **Operation id for Get-Job-Attributes was 0x000A (Get-Jobs' id); corrected
+  to 0x0009** per the IANA IPP Operations registry / CUPS `ipp.h`
+  cross-check. Regression-anchored in tests.
+
 ## [0.1.0] - 2026-09-08
 
 ### Added

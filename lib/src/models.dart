@@ -40,6 +40,7 @@ class DiscoveredPrinter {
     required this.port,
     required this.resourcePath,
     this.uuid,
+    this.secure = false,
     Map<String, String>? txt,
   })  : txt = Map.unmodifiable(txt ?? const <String, String>{}),
         assert(resourcePath.startsWith('/'), 'resourcePath must start with /');
@@ -62,20 +63,30 @@ class DiscoveredPrinter {
   /// 原始 TXT 键值（小写键，值原样）。
   final Map<String, String> txt;
 
-  /// 逻辑 IPP URI 字符串（保序，用于 printer-uri 属性；Uri.toString
-  /// 会把 host 归一为小写，破坏与广播记录的一致性，故不用）。
-  String get ippUriString => 'ipp://$host:$port$resourcePath';
+  /// 传输是否加密（该实例来自 `_ipps._tcp` 广播）。
+  ///
+  /// 同一 UUID 同时广播 `_ipp` 与 `_ipps` 时，发现层保留明文实例
+  /// （见 [PrinterDiscovery] 实现的去重偏好）。
+  final bool secure;
 
-  /// HTTP 传输地址字符串（保序）。
-  String get httpUriString => 'http://$host:$port$resourcePath';
+  /// 逻辑 IPP URI 字符串（保序，用于 printer-uri 属性；RFC 8011 §4.1.5
+  /// 要求 scheme 恒为 ipp/ipps 逻辑 scheme，与 HTTP 传输通道无关）。
+  /// Uri.toString 会把 host 归一为小写，破坏与广播记录的一致性，故不用。
+  String get ippUriString => '${secure ? 'ipps' : 'ipp'}://$host:$port$resourcePath';
 
-  /// 逻辑 IPP URI（ipp:// scheme，按 RFC 8011 用于 printer-uri 属性）。
-  Uri get ippUri =>
-      Uri(scheme: 'ipp', host: host, port: port, path: resourcePath);
+  /// HTTP 传输地址字符串（保序；secure 时走 https）。
+  String get httpUriString =>
+      '${secure ? 'https' : 'http'}://$host:$port$resourcePath';
 
-  /// HTTP 传输地址（IPP over HTTP 的 POST 端点）。
-  Uri get httpUri =>
-      Uri(scheme: 'http', host: host, port: port, path: resourcePath);
+  /// 逻辑 IPP URI（按 RFC 8011 用于 printer-uri 属性）。
+  Uri get ippUri => Uri(
+      scheme: secure ? 'ipps' : 'ipp', host: host, port: port,
+      path: resourcePath);
+
+  /// HTTP 传输地址（IPP over HTTP(S) 的 POST 端点）。
+  Uri get httpUri => Uri(
+      scheme: secure ? 'https' : 'http', host: host, port: port,
+      path: resourcePath);
 
   /// 稳定身份键：优先 UUID，回退到 实例名@host:port。
   String get identity => uuid ?? '$name@$host:$port';

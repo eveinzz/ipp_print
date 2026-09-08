@@ -48,20 +48,50 @@ enum IppJobState {
       .firstWhere((s) => s.code == code, orElse: () => IppJobState.pending);
 }
 
+/// Get-Jobs 返回的单个作业摘要。
+class IppJobSummary {
+  const IppJobSummary({
+    required this.jobId,
+    required this.jobState,
+    this.jobName,
+    this.userName,
+  });
+
+  final int jobId;
+  final IppJobState jobState;
+
+  /// job-name（作业提交时的名字）。
+  final String? jobName;
+
+  /// job-originating-user-name（提交者）。
+  final String? userName;
+}
+
 /// HTTP 传输层瞬态故障（5xx）：可由轮询逻辑重试吸收。
 class IppTransientException extends IppPrintException {
   const IppTransientException(super.message);
 }
 
-/// IPP 传输客户端：POST application/ipp 到打印机 631 端口（明文通道）。
+/// IPP 传输客户端：POST application/ipp 到打印机 631 端口
+/// （明文 ipp:// 或 TLS ipps:// 通道，由 [DiscoveredPrinter.secure] 决定）。
 class IppClient {
-  IppClient({HttpClient? httpClient})
-      : _http = httpClient ??
-            (HttpClient()
-              ..connectionTimeout = const Duration(seconds: 8)
-              // IPP 是局域网直连协议：显式绕过环境 HTTP 代理（沙盒/公司
-              // 代理会把 631 端口请求转成 502/拒绝）。打印机不经代理。
-              ..findProxy = (uri) => 'DIRECT');
+  /// [acceptSelfSignedTls]：打印机证书普遍为自签（行业常态，无公共 CA
+  /// 体系），TLS 通道默认接受非受信证书——加密即目的，不做身份强校验。
+  /// 设为 false 则仅接受系统信任链证书（严格模式，多数打印机将握手失败）。
+  IppClient({HttpClient? httpClient, bool acceptSelfSignedTls = true})
+      : _http = httpClient ?? _createClient(acceptSelfSignedTls);
+
+  static HttpClient _createClient(bool acceptSelfSignedTls) {
+    final c = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 8)
+      // IPP 是局域网直连协议：显式绕过环境 HTTP 代理（沙盒/公司代理会把
+      // 631 端口请求转成 502/拒绝）。打印机不经代理。
+      ..findProxy = (uri) => 'DIRECT';
+    if (acceptSelfSignedTls) {
+      c.badCertificateCallback = (cert, host, port) => true;
+    }
+    return c;
+  }
 
   final HttpClient _http;
   var _requestId = 0;
@@ -151,6 +181,53 @@ class IppClient {
     return IppJobState.fromCode(code ?? IppJobState.pending.code);
   }
 
+  /// 取消作业（RFC 8011 §4.3.3）。作业不存在时打印机回
+  /// client-error-not-found → 抛 [IppStatusException]。
+  Future<void> cancelJob(DiscoveredPrinter p, int jobId) async {
+    final res = await post(
+      p.httpUri,
+      IppCodec.buildCancelJob(
+        printerUri: p.ippUriString,
+        jobId: jobId,
+        requestId: _nextRequestId,
+      ),
+    );
+    _ensureSuccess(res, 'Cancel-Job');
+  }
+
+  /// 查询作业队列（RFC 8011 §4.2.6 Get-Jobs）。
+  ///
+  /// [whichJobs]：'not-completed'（默认，活动队列）或 'completed'。
+  /// [myJobs]：true 时只返回 requesting-user-name 对应用户的作业。
+  /// [requestedAttributes]：请求的作业属性集；null 则省略（默认 all）。
+  Future<List<IppJobSummary>> getJobs(
+    DiscoveredPrinter p, {
+    bool myJobs = false,
+    String whichJobs = 'not-completed',
+    List<String>? requestedAttributes,
+  }) async {
+    final res = await post(
+      p.httpUri,
+      IppCodec.buildGetJobs(
+        printerUri: p.ippUriString,
+        requestId: _nextRequestId,
+        myJobs: myJobs,
+        whichJobs: whichJobs,
+        requestedAttributes: requestedAttributes,
+      ),
+    );
+    _ensureSuccess(res, 'Get-Jobs');
+    return [
+      for (final g in res.groups.where((g) => g.tag == IppCodec.tagJobGroup))
+        IppJobSummary(
+          jobId: _intOf(g, 'job-id') ?? 0,
+          jobState: IppJobState.fromCode(_intOf(g, 'job-state') ?? 3),
+          jobName: _stringOf(g, 'job-name'),
+          userName: _stringOf(g, 'job-originating-user-name'),
+        ),
+    ];
+  }
+
   /// 轮询到终态或超时（终态含 completed/aborted/canceled）。
   ///
   /// 瞬态故障（网络抖动/HTTP 5xx）在 [maxTransientErrors] 次内被吸收，
@@ -198,6 +275,18 @@ class IppClient {
     final values = g?.attributes[name];
     if (values == null || values.isEmpty) return null;
     return values.first.asInt;
+  }
+
+  int? _intOf(IppGroup g, String name) {
+    final values = g.attributes[name];
+    if (values == null || values.isEmpty) return null;
+    return values.first.asInt;
+  }
+
+  String? _stringOf(IppGroup g, String name) {
+    final values = g.attributes[name];
+    if (values == null || values.isEmpty) return null;
+    return values.first.asString;
   }
 
   static Future<Uint8List> _collect(HttpClientResponse response) async {
