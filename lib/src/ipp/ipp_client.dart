@@ -99,24 +99,36 @@ class IppClient {
   int get _nextRequestId => _requestId = (_requestId + 1) & 0x7FFFFFFF;
 
   Future<IppResponse> post(Uri httpEndpoint, Uint8List ippBody) async {
+    var (status, body) = await _postOnce(httpEndpoint, ippBody);
+    if (status == HttpStatus.upgradeRequired && httpEndpoint.scheme == 'http') {
+      // TLS-only 打印机（如 EPSON L3250）：明文端点回 426 Upgrade Required，
+      // 要求升级 TLS。按 RFC 2817 精神换 https 同端口重试一次
+      // （打印机证书普遍自签，已由 acceptSelfSignedTls 放行）。
+      final upgraded = httpEndpoint.replace(scheme: 'https');
+      (status, body) = await _postOnce(upgraded, ippBody);
+    }
+    if (status >= 500) {
+      // 服务器侧瞬态故障：交由轮询重试吸收，不视为协议错误。
+      throw IppTransientException(
+          'HTTP $status from ${httpEndpoint.host}');
+    }
+    if (status != HttpStatus.ok) {
+      throw IppPrintException('HTTP $status from ${httpEndpoint.host}');
+    }
+    return IppCodec.parseResponse(body);
+  }
+
+  /// 发送一次请求并收取原始响应（状态码与体；解析与错误判定交 [post]）。
+  Future<(int, Uint8List)> _postOnce(Uri httpEndpoint, Uint8List ippBody) async {
     final request = await _http.postUrl(httpEndpoint);
     request.headers.set(HttpHeaders.contentTypeHeader, 'application/ipp');
     request.headers.set(HttpHeaders.acceptEncodingHeader, 'identity');
-    request.headers.set(HttpHeaders.userAgentHeader, 'ipp_print/0.1');
+    request.headers.set(HttpHeaders.userAgentHeader, 'ipp_print/0.2');
     request.headers.contentLength = ippBody.length;
     request.add(ippBody);
     final response = await request.close();
     final body = await _collect(response);
-    if (response.statusCode >= 500) {
-      // 服务器侧瞬态故障：交由轮询重试吸收，不视为协议错误。
-      throw IppTransientException(
-          'HTTP ${response.statusCode} from ${httpEndpoint.host}');
-    }
-    if (response.statusCode != HttpStatus.ok) {
-      throw IppPrintException(
-          'HTTP ${response.statusCode} from ${httpEndpoint.host}');
-    }
-    return IppCodec.parseResponse(body);
+    return (response.statusCode, body);
   }
 
   Future<PrinterAttributes> getPrinterAttributes(DiscoveredPrinter p) async {
