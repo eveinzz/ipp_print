@@ -5,7 +5,7 @@
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 ![Dart SDK](https://img.shields.io/badge/Dart-%5E3.4-0175C2?logo=dart&logoColor=white)
 ![Protocol](https://img.shields.io/badge/protocol-IPP%201.1%20(RFC%208011)-green)
-![Tests](https://img.shields.io/badge/tests-56%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-77%20passing-brightgreen)
 
 面向 Dart/Flutter 的无界面 IPP 直连打印内核：**打印机发现 + 确定性能力分类 + IPP Print-Job 传输**，含 PWG-raster 编码。刻意不含 UI——展示与交互全部留给宿主 App。
 
@@ -48,10 +48,11 @@ flowchart TB
 
 ```yaml
 dependencies:
-  ipp_print: ^0.1.0
+  ipp_print:
+    path: packages/ipp_print
 ```
 
-> 开发阶段请改用 path 或 git 依赖。
+> 尚未发布到 pub.dev，现阶段请使用 path 或 git 依赖。
 
 ## 用法
 
@@ -155,7 +156,7 @@ Apple TN3179。HP 官方 [jipp](https://github.com/HPInc/jipp) 与 istopwg 指�
 
 ## Roadmap
 
-已规划事项（TLS 传输、作业管理、能力协商等）见 [TODO.md](TODO.md)；
+已规划事项（分辨率/色彩能力协商、介质协商等）见 [TODO.md](TODO.md)；
 已发布变更记录于 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 许可证

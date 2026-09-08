@@ -5,7 +5,7 @@ English | [简体中文](README.zh-CN.md)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 ![Dart SDK](https://img.shields.io/badge/Dart-%5E3.4-0175C2?logo=dart&logoColor=white)
 ![Protocol](https://img.shields.io/badge/protocol-IPP%201.1%20(RFC%208011)-green)
-![Tests](https://img.shields.io/badge/tests-56%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-77%20passing-brightgreen)
 
 Headless IPP direct-printing kernel for Dart/Flutter: **printer discovery + deterministic capability classification + IPP Print-Job transport** with PWG-raster encoding. No UI by design — presentation and interaction are left to the host app.
 
@@ -48,10 +48,11 @@ flowchart TB
 
 ```yaml
 dependencies:
-  ipp_print: ^0.1.0
+  ipp_print:
+    path: packages/ipp_print
 ```
 
-> While in development, use a path or git dependency instead.
+> Not published to pub.dev yet; use a path or git dependency for now.
 
 ## Usage
 
@@ -136,7 +137,7 @@ serve as capability checklists.
 1. **mDNS-broadcasting devices only** — USB-connected, offline, or non-broadcasting printers are invisible (same as the OS print panel).
 2. **Self-signed TLS accepted by default** — printer certificates are self-signed as a rule; the `ipps://` channel validates encryption but not identity (strict mode via `IppClient(acceptSelfSignedTls: false)`).
 3. **No PDF direct-send** — direct printing requires the printer to declare `image/pwg-raster` in `pdl` (the classifier guarantees no misdirected jobs).
-4. **Fixed 300 dpi / sRGB-8** — resolution/color negotiation is not implemented yet (`printer-resolution` is not sent).
+4. **Fixed 300 dpi / sRGB-8** — resolution negotiation is not implemented yet (`printer-resolution` is not sent). Color mode is deliberately **not sent** as a job attribute, so the printer applies its own `print-color-mode-default` per RFC 8011 (typically `auto`); an explicit override (`color` / `monochrome`) is still supported via `PrintOptions.colorMode`.
 5. **AirPrint-class printers are not intercepted** — devices classified as `airPrint` are handed to the OS print panel.
 
 ## FAQ
