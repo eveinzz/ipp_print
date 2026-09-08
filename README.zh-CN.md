@@ -139,6 +139,20 @@ Apple TN3179。HP 官方 [jipp](https://github.com/HPInc/jipp) 与 istopwg 指�
 4. **固定 300 dpi / sRGB-8** —— 分辨率/色彩协商尚未实现（不发送 `printer-resolution`）。
 5. **不接管 AirPrint 机型** —— 分类为 `airPrint` 的设备交还系统打印面板。
 
+## FAQ
+
+**为什么 iOS 列不出我的网络打印机（比如爱普生墨仓机）？**
+最可能的原因是打印机缺少 Apple 的 URF 光栅格式，而 iOS 打印面板只列 AirPrint 打印机。AirPrint 要求打印机的 Bonjour TXT 记录含 `URF=`（或 `pdl=` 含 `image/urf`）；很多墨仓机型只广播 `image/pwg-raster`。本包正是为这一类打印机而建。
+
+**为什么 Flutter 的 `printing` 插件发现不了这台打印机？**
+因为 `printing` 把打印交给系统打印面板——而面板永远不会列出非 AirPrint 打印机。这是平台限制，不是插件的 Bug。常见组合：`printing.rasterPdf` 负责栅格化 + 本包负责发现与 IPP 传输。
+
+**我的打印机适用吗？怎么自查？**
+判据：打印机广播 IPP 且 `pdl=` 含 `image/pwg-raster`、但没有 `URF=`。macOS 下用 `dns-sd -B _ipp._tcp` 找到实例，再用 `dns-sd -L <实例名> _ipp._tcp` 读 TXT 记录——无 `URF=` 且 `pdl=` 含 `image/pwg-raster` 即可直连打印。本包的能力分类器在运行时做的正是这个判定。
+
+**这个包和 `printing` 是什么关系？**
+互补而非竞争。`printing` 负责渲染 PDF 与驱动系统打印面板；本包为面板看不见的打印机补上发现与 IPP 传输。注入一个由 `printing` 的 `rasterPdf` 实现的 `PdfRasterizer` 即可拼出完整管线。
+
 ## Roadmap
 
 已规划事项（TLS 传输、作业管理、能力协商等）见 [TODO.md](TODO.md)；

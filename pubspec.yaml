@@ -1,9 +1,8 @@
 name: ipp_print
 description: >-
-  Headless IPP direct-printing kernel for Flutter/Dart: mDNS printer
-  discovery, deterministic capability classification (AirPrint / IPP-direct /
-  vendor-only) and IPP Print-Job transport with PWG-raster encoding.
-  No UI by design — presentation is left to the host app.
+  IPP direct printing for Flutter/Dart: find and print on printers the OS
+  print panel (AirPrint) rejects. Bonjour TXT classification, IPP 1.1,
+  PWG-raster. Pure Dart, no UI.
 version: 0.1.0
 # 发布日移除本行（当前保持禁发，防误发布）。
 publish_to: none
@@ -15,6 +14,8 @@ topics:
   - printer
   - mdns
   - airprint
+  - bonjour
+  - dns-sd
 
 environment:
   sdk: ^3.4.0

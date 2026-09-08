@@ -139,6 +139,20 @@ serve as capability checklists.
 4. **Fixed 300 dpi / sRGB-8** — resolution/color negotiation is not implemented yet (`printer-resolution` is not sent).
 5. **AirPrint-class printers are not intercepted** — devices classified as `airPrint` are handed to the OS print panel.
 
+## FAQ
+
+**Why doesn't iOS list my network printer (e.g. an Epson tank printer)?**
+Most likely the printer lacks Apple's URF raster format, and the iOS print panel only lists AirPrint printers. AirPrint requires `URF=` in the printer's Bonjour TXT record (or `image/urf` in `pdl=`); many tank models advertise only `image/pwg-raster`. This package was built exactly for that class of printers.
+
+**Why can't the Flutter `printing` plugin find this printer?**
+Because `printing` hands printing over to the OS print panel — and the panel never lists non-AirPrint printers. This is a platform limitation, not a plugin bug. A common combination: `printing.rasterPdf` for rasterization plus this package for discovery and IPP transport.
+
+**Will my printer work with this package? How can I check?**
+It qualifies if the printer advertises IPP with `image/pwg-raster` but no URF. From macOS: `dns-sd -B _ipp._tcp` lists instances, `dns-sd -L <instance> _ipp._tcp` reads the TXT record — no `URF=` and `pdl=` containing `image/pwg-raster` means direct printing works. The package's capability classifier performs exactly this check at runtime.
+
+**How does this package relate to `printing`?**
+They are complementary. `printing` renders PDFs and drives the system print panel; this package adds discovery and IPP transport for printers that panel cannot see. Inject a `PdfRasterizer` backed by `printing`'s `rasterPdf` to build the full pipeline.
+
 ## Roadmap
 
 Planned work (TLS transport, job management, capability negotiation, …) is
