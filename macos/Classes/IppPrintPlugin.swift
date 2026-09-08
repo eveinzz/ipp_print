@@ -53,6 +53,9 @@ final class DiscoverJob: NSObject, NetServiceBrowserDelegate, NetServiceDelegate
   private var finished = false
   private var pendingResolves = 0
   private var graceScheduled = false
+  /// 正在解析中的服务：必须强持有，否则 ARC 释放后 resolve 被静默取消
+  /// （连 didNotResolve 都不会回调）。
+  private var resolving: [NetService] = []
 
   init(types: [String], timeoutMs: Int, result: @escaping FlutterResult) {
     self.types = types
@@ -88,6 +91,8 @@ final class DiscoverJob: NSObject, NetServiceBrowserDelegate, NetServiceDelegate
     guard !finished else { return }
     finished = true
     browsers.forEach { $0.stop() }
+    resolving.forEach { $0.stop() }
+    resolving.removeAll()
     ippLog("discover finish resolved=\(resolved.count)")
     result(resolved)
   }
@@ -102,6 +107,7 @@ final class DiscoverJob: NSObject, NetServiceBrowserDelegate, NetServiceDelegate
     let secure = isSecureBrowser(browser)
     objc_setAssociatedObject(service, &kSecureKey, secure, .OBJC_ASSOCIATION_RETAIN)
     service.delegate = self
+    resolving.append(service)
     pendingResolves += 1
     service.resolve(withTimeout: min(5.0, Double(timeoutMs) / 1000.0 + 1.0))
   }
@@ -115,6 +121,7 @@ final class DiscoverJob: NSObject, NetServiceBrowserDelegate, NetServiceDelegate
 
   func netServiceDidResolveAddress(_ sender: NetService) {
     pendingResolves -= 1
+    resolving.removeAll { $0 === sender }
     guard !finished else { return }
     ippLog("resolved: \(sender.name) port=\(sender.port) host=\(sender.hostName ?? "nil")")
     let secure = (objc_getAssociatedObject(sender, &kSecureKey) as? Bool) ?? false
@@ -139,6 +146,7 @@ final class DiscoverJob: NSObject, NetServiceBrowserDelegate, NetServiceDelegate
 
   func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber]) {
     pendingResolves -= 1
+    resolving.removeAll { $0 === sender }
     guard !finished else { return }
     // 解析失败：跳过该实例，不回错误（发现层不抛错约定）。
     ippLog("didNotResolve: \(sender.name) \(errorDict)")
