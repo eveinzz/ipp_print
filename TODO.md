@@ -1,34 +1,37 @@
-# TODO / Roadmap
+# TODO / Roadmap（对内）
 
-Prioritized future work for `ipp_print`. Completed items are recorded in
-[CHANGELOG.md](CHANGELOG.md).
+`ipp_print` 的分阶段计划。已完成事项记录在 [CHANGELOG.md](CHANGELOG.md)，
+对外文档见 [README.md](README.md) / [README.zh-CN.md](README.zh-CN.md)。
 
 ## P1
 
-- [ ] **`ipps://` (TLS) transport** — direct connection for printers advertising
-  only `_ipps._tcp` (no `_ipp._tcp`), including a self-signed certificate
-  policy. Basis: IPP Guide Ch. 1 (HTTPS as the encryption channel).
-- [ ] **`Cancel-Job` / `Get-Jobs`** — job management operations
-  (IPP Guide Appendix A: job-id + requesting-user-name).
+- [ ] **`ipps://`（TLS）传输** —— 支持「仅广播 `_ipps._tcp`（无 `_ipp._tcp`）」的机型直连，
+  含自签证书策略。依据：IPP Guide Ch.1（HTTPS 即加密通道）。对应 README 边界 2。
+- [ ] **`Cancel-Job` / `Get-Jobs`** —— 作业管理操作
+  （IPP Guide Appendix A：job-id + requesting-user-name）。
 
 ## P2
 
-- [ ] **`job-state-reasons` passthrough** — surface reasons such as
-  `media-jam`, `document-format-error` to the host app
-  (IANA IPP Registrations).
-- [ ] **`Validate-Job` pre-check** and the `Create-Job` + `Send-Document`
-  multi-document path (IPP Guide Ch. 1).
-- [ ] **Resolution / color / duplex negotiation** — expose
-  `printer-resolution-supported`, `print-color-mode-supported`,
-  `sides-supported` as a data source for host UIs (removes the fixed
-  300 dpi / sRGB-8 limitation).
+- [ ] **`job-state-reasons` 透传** —— 将 `media-jam`、`document-format-error`
+  等原因透出给宿主 App（IANA IPP Registrations）。
+- [ ] **`Validate-Job` 预检** 与 `Create-Job` + `Send-Document` 多文档路径
+  （IPP Guide Ch.1）。
+- [ ] **分辨率 / 彩色 / 双面能力协商** —— 透出 `printer-resolution-supported`、
+  `print-color-mode-supported`、`sides-supported` 作为宿主 UI 数据源
+  （解除固定 300 dpi / sRGB-8 的限制）。
 
 ## P3
 
-- [ ] **Basic / Digest authentication** — negotiated from
-  `uri-authentication-supported` (IPP Guide Ch. 2).
-- [ ] **HTTP 426 Upgrade handling** — plaintext → TLS upgrade path
-  (RFC 8011 / IPP Everywhere).
-- [ ] **Model-layer directory split** — if `lib/src/models.dart` grows past
-  ~400 lines, split into `models/printer.dart` / `models/options.dart` /
-  `models/exceptions.dart` with unchanged public API.
+- [ ] **Basic / Digest 认证** —— 按 `uri-authentication-supported` 协商
+  （IPP Guide Ch.2）。
+- [ ] **HTTP 426 Upgrade 处理** —— 明文 → TLS 升级路径
+  （RFC 8011 / IPP Everywhere）。
+- [ ] **模型层目录化** —— 若 `lib/src/models.dart` 超过约 400 行，
+  拆为 `models/printer.dart` / `models/options.dart` / `models/exceptions.dart`，
+  对外 API 不变。
+
+## 工程纪律（内部约定）
+
+- 验收门槛：`flutter analyze` 零告警 + `dart test` 全绿 + 单文件 ≤400 行；
+- 能力判定只允许来自 TXT/IPP 确定性字段，禁止推断；
+- 发布日操作：移除 `publish_to: none` → `dart pub publish`（当前保持禁发防误发布）。
