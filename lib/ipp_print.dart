@@ -5,6 +5,7 @@ library;
 
 export 'src/capability/capability.dart';
 export 'src/discovery/mdns_discovery.dart';
+export 'src/discovery/native_bonjour_discovery.dart';
 export 'src/ipp/ipp_client.dart';
 export 'src/ipp/ipp_message.dart';
 export 'src/ipp_print_core.dart';

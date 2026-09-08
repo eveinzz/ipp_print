@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0]
+
+### Added
+
+- **Native Bonjour discovery on iOS/macOS** (`NativeBonjourDiscovery`,
+  `IppPrintPlugin`): browsing now goes through the system Bonjour
+  framework (mDNSResponder), which is exempt from the iOS 14+ multicast
+  entitlement that silently blocks raw-socket mDNS (`multicast_dns`).
+  Discovery is routed by platform automatically (`defaultPlatformDiscovery`):
+  Apple platforms use the native path, all others keep `multicast_dns`.
+  Requires only the standard Local Network permission.
+
+### Changed
+
+- Package converted from pure Dart to a Flutter plugin (adds native
+  `ios/` and `macos/` pods); the IPP transport core remains pure Dart.
+
+## [0.2.0]
+
+### Added
+
+- **Native Bonjour discovery on iOS/macOS** (`NativeBonjourDiscovery`,
+  `IppPrintPlugin`): browsing now goes through the system Bonjour
+  framework (mDNSResponder), which is exempt from the iOS 14+ multicast
+  entitlement that silently blocks raw-socket mDNS (`multicast_dns`).
+  Discovery is routed by platform automatically (`defaultPlatformDiscovery`):
+  Apple platforms use the native path, all others keep `multicast_dns`.
+  Requires only the standard Local Network permission.
+
+### Changed
+
+- Package converted from pure Dart to a Flutter plugin (adds native
+  `ios/` and `macos/` pods); the IPP transport core remains pure Dart.
+
 ## [Unreleased]
 
 ### Added

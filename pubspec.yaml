@@ -1,9 +1,9 @@
 name: ipp_print
 description: >-
-  IPP direct printing for Flutter/Dart: find and print on printers the OS
-  print panel (AirPrint) rejects. Bonjour TXT classification, IPP 1.1,
-  PWG-raster. Pure Dart, no UI.
-version: 0.1.0
+  IPP direct printing for Flutter: find and print on printers the OS
+  print panel (AirPrint) rejects. Native Bonjour discovery on iOS/macOS
+  (no multicast entitlement), mDNS elsewhere. IPP 1.1, PWG-raster, no UI.
+version: 0.2.0
 # 发布日移除本行（当前保持禁发，防误发布）。
 publish_to: none
 repository: https://github.com/eveinzz/ipp_print
@@ -21,8 +21,20 @@ environment:
   sdk: ^3.4.0
 
 dependencies:
+  flutter:
+    sdk: flutter
   multicast_dns: ^0.3.2+7
 
 dev_dependencies:
+  flutter_test:
+    sdk: flutter
   lints: ^4.0.0
   test: ^1.25.0
+
+flutter:
+  plugin:
+    platforms:
+      ios:
+        pluginClass: IppPrintPlugin
+      macos:
+        pluginClass: IppPrintPlugin

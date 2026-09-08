@@ -2,7 +2,7 @@ import 'dart:io' show SocketException;
 import 'dart:typed_data';
 
 import 'capability/capability.dart';
-import 'discovery/mdns_discovery.dart';
+import 'discovery/native_bonjour_discovery.dart' show defaultPlatformDiscovery;
 import 'ipp/ipp_client.dart';
 import 'models.dart';
 import 'pwg/pwg_raster_encoder.dart';
@@ -13,7 +13,7 @@ import 'pwg/pwg_raster_encoder.dart';
 /// 不接管 airPrint 级机型（交还系统打印面板）。
 class IppPrint {
   IppPrint({PrinterDiscovery? discovery, IppClient? client, int dpi = 300})
-      : _discovery = discovery ?? MDnsPrinterDiscovery(),
+      : _discovery = discovery ?? defaultPlatformDiscovery(),
         _client = client ?? IppClient(),
         _dpi = dpi;
 
