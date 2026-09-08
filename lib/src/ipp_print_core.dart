@@ -1,11 +1,19 @@
+import 'dart:async' show TimeoutException;
 import 'dart:io' show SocketException;
 import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart' show kDebugMode;
 
 import 'capability/capability.dart';
 import 'discovery/native_bonjour_discovery.dart' show defaultPlatformDiscovery;
 import 'ipp/ipp_client.dart';
 import 'models.dart';
 import 'pwg/pwg_raster_encoder.dart';
+
+/// 诊断日志：仅 DEBUG 输出，前缀与原生层一致，release 零开销。
+void ippProbeLog(String message) {
+  if (kDebugMode) print('[ipp_print] $message');
+}
 
 /// Facade：插件唯一入口。
 ///
@@ -47,10 +55,16 @@ class IppPrint {
           : PrinterProbeStatus.unsupported;
     }
     try {
-      final attrs = await _client.getPrinterAttributes(printer);
+      ippProbeLog('probe ${printer.name} -> ${printer.httpUriString}');
+      // 挂起防御：HttpClient 的 connectionTimeout 不覆盖 DNS 解析与
+      // 慢响应体，整机探测限时 10s（超时按无应答=offline 处理）。
+      final attrs = await _client
+          .getPrinterAttributes(printer)
+          .timeout(const Duration(seconds: 10));
       final formats = attrs.documentFormats;
       final ok = formats.isEmpty ||
           formats.any((f) => f.toLowerCase().contains('pwg-raster'));
+      ippProbeLog('probe ${printer.name}: $ok formats=$formats');
       final info = PrinterInfo(
         capability: ok ? PrinterCapability.ippDirect : PrinterCapability.vendorOnly,
         mediaSupported: attrs.mediaSupported,
@@ -60,9 +74,16 @@ class IppPrint {
       );
       onInfo?.call(info);
       return ok ? PrinterProbeStatus.ready : PrinterProbeStatus.unsupported;
-    } on SocketException {
+    } on TimeoutException {
+      // 无应答（DNS 挂起/慢响应/静默丢包）：如实记 offline，绝不让
+      // await 挂起令条目永久停留「探测中」。
+      ippProbeLog('probe ${printer.name}: TIMEOUT (10s) -> offline');
       return PrinterProbeStatus.offline;
-    } on IppPrintException {
+    } on SocketException catch (e) {
+      ippProbeLog('probe ${printer.name}: offline ($e)');
+      return PrinterProbeStatus.offline;
+    } on IppPrintException catch (e) {
+      ippProbeLog('probe ${printer.name}: unsupported ($e)');
       return PrinterProbeStatus.unsupported;
     }
   }

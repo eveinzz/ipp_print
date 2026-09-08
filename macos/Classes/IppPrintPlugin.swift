@@ -131,6 +131,7 @@ final class DiscoverJob: NSObject, NetServiceBrowserDelegate, NetServiceDelegate
       "secure": secure,
     ]
     item["host"] = Self.ipv4(from: sender.addresses ?? []) ?? sender.hostName ?? ""
+    ippLog("resolved item: name=\(sender.name) host=\(item["host"] ?? "nil") port=\(item["port"] ?? 0)")
     if let txtData = sender.txtRecordData() {
       let dict = NetService.dictionary(fromTXTRecord: txtData)
       var txt: [String: String] = [:]
