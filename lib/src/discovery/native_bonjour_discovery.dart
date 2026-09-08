@@ -10,6 +10,7 @@
 // Dart 侧，与 MDnsPrinterDiscovery 的 identity 去重偏好一致。
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/services.dart';
 
 import '../models.dart';
@@ -70,10 +71,18 @@ class NativeBonjourDiscovery implements PrinterDiscovery {
       serviceTypes: serviceTypes,
       timeout: timeout,
     );
+    if (kDebugMode) {
+      print('[ipp_print] native browse -> ${items.length} item(s)');
+    }
     final out = <String, DiscoveredPrinter>{};
     for (final item in items) {
       final printer = _assemble(item);
-      if (printer == null) continue;
+      if (printer == null) {
+        if (kDebugMode) {
+          print('[ipp_print] native item skipped (missing key fields): $item');
+        }
+        continue;
+      }
       // 与 MDnsPrinterDiscovery 一致：同一 UUID 双广播保留明文实例。
       final key = printer.identity;
       final existing = out[key];
