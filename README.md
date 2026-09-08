@@ -118,7 +118,7 @@ Every protocol behavior traces back to an authoritative source; community implem
 | `Cancel-Job` (job-id required) | RFC 8011 / IPP Guide | §4.3.3, Appendix A |
 | `Get-Jobs` (which-jobs / my-jobs / requested-attributes) | RFC 8011 / IPP Guide | §4.2.6, Appendix A |
 | `ipps://` transport (IPP over HTTPS + ipps URI scheme) | RFC 7472 | §3–4 |
-| PWG-raster page header (RaS2, 36 B, sRGB-8 = 19) | PWG 5102.4 | — |
+| PWG-raster page header (1796-octet `cups_page_header2_t`, file-level `RaS2` sync word, sRGB-8 = 19) | PWG 5102.4 | §4 |
 | Self-describing media names `iso_a4_210x297mm` | PWG 5101.1 (Media Names) | — |
 | Browsing `_ipp._tcp` / `_ipps._tcp` / `_universal._sub._ipp._tcp` | RFC 6763 (DNS-SD) + Apple AirPrint spec | — |
 | TXT keys `rp` / `pdl` / `UUID` / `ty` | PWG 5101.2 (Bonjour Printing Spec) | — |
