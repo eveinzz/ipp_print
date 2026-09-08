@@ -4,7 +4,7 @@ import 'package:ipp_print/src/ipp/ipp_message.dart';
 import 'package:ipp_print/src/models.dart';
 import 'package:test/test.dart';
 
-/// 独立参照实现：手工按 RFC 2910 编码，用于金标比对（非被测代码）。
+/// 独立参照实现：手工按 RFC 8010 编码，用于金标比对（非被测代码）。
 class RefWriter {
   final out = BytesBuilder();
 
@@ -30,7 +30,7 @@ class RefWriter {
 
   void additionalValue(int tag, List<int> value) {
     out.addByte(tag);
-    _len(0); // 额外值：零长度名（RFC 2910 §3.1.4.2）
+    _len(0); // 额外值：零长度名（RFC 8010 §3.1.5）
     _len(value.length);
     out.add(value);
   }
@@ -150,7 +150,7 @@ void main() {
     r.attr(0x48, 'attributes-natural-language', _s('en'));
     r.attr(0x45, 'printer-uri', _s('ipp://p.local:631/ipp/print'));
     r.attr(0x42, 'requesting-user-name', _s('ipp_print'));
-    r.attr(0x22, 'my-jobs', [0x01]); // RFC 8011 §5.1.22：boolean 恒 1 字节
+    r.attr(0x22, 'my-jobs', [0x01]); // RFC 8011 §5.1.12：boolean 恒 1 字节
     r.attr(0x44, 'which-jobs', _s('completed'));
     r.attr(0x44, 'requested-attributes', _s('job-id'));
     r.additionalValue(0x44, _s('job-state'));

@@ -230,8 +230,8 @@ class IppClient {
 
   /// 轮询到终态或超时（终态含 completed/aborted/canceled）。
   ///
-  /// 瞬态故障（网络抖动/HTTP 5xx）在 [maxTransientErrors] 次内被吸收，
-  /// 超限或持久性错误立即抛出。
+  /// 瞬态故障（网络抖动 / HTTP 5xx / ipps 通道 TLS 握手抖动）在
+  /// [maxTransientErrors] 次内被吸收，超限或持久性错误立即抛出。
   Future<IppJobState> waitForTerminalState(
     DiscoveredPrinter p,
     int jobId, {
@@ -247,6 +247,11 @@ class IppClient {
         state = await getJobState(p, jobId);
         transientErrors = 0;
       } on SocketException {
+        if (++transientErrors > maxTransientErrors) rethrow;
+        await Future<void>.delayed(interval);
+        continue;
+      } on HandshakeException {
+        // ipps 打印机的 TLS 握手瞬时失败与网络抖动同性质：可重试吸收。
         if (++transientErrors > maxTransientErrors) rethrow;
         await Future<void>.delayed(interval);
         continue;

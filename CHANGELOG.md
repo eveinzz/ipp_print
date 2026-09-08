@@ -17,13 +17,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   both `_ipp._tcp` and `_ipps._tcp`.
 - Job management: `Cancel-Job` (`IppClient.cancelJob`) and `Get-Jobs`
   (`IppClient.getJobs` → `List<IppJobSummary>`), exposed on the `IppPrint`
-  facade, with boolean value encoding per RFC 8011 §5.1.22.
+  facade, with boolean value encoding per RFC 8011 §5.1.12.
 
 ### Fixed
 
 - **Operation id for Get-Job-Attributes was 0x000A (Get-Jobs' id); corrected
   to 0x0009** per the IANA IPP Operations registry / CUPS `ipp.h`
   cross-check. Regression-anchored in tests.
+- **Job-state polling now absorbs transient TLS handshake failures**
+  (`HandshakeException`) on `ipps://` printers, matching the existing
+  tolerance for network flaps and HTTP 5xx; bounded by
+  `maxTransientErrors`. Regression-anchored in tests.
+- Standards citations corrected and upgraded: RFC 2910 → RFC 8010
+  (§3.1.4 / §3.1.5, verified against the RFC text); printer-state clause
+  §5.4.12 → §5.4.11; boolean clause §5.1.22 → §5.1.12; added RFC 7472
+  (IPP over HTTPS / `ipps` URI scheme) and operation-code rows to the
+  README standards mapping.
 
 ## [0.1.0] - 2026-09-08
 
@@ -34,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (RFC 6763 / PWG 5101.2).
 - Deterministic capability classification from mDNS TXT records
   (`URF=` / `pdl=`) into `airPrint` / `ippDirect` / `vendorOnly` / `unknown`.
-- IPP 1.1 codec (RFC 2910 / RFC 8011): `Print-Job`,
+- IPP 1.1 codec (RFC 8010 / RFC 8011): `Print-Job`,
   `Get-Printer-Attributes`, `Get-Job-Attributes`, with golden-byte tests
   against an independent reference implementation.
 - IPP transport client over `dart:io` `HttpClient`

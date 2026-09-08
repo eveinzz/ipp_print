@@ -114,7 +114,7 @@ class PrinterInfo {
   /// 打印机声明支持的文档 MIME 格式。
   final List<String> documentFormats;
 
-  /// IPP printer-state（idle/processing/stopped；RFC 8011 §5.4.12）。
+  /// IPP printer-state（idle/processing/stopped；RFC 8011 §5.4.11）。
   final String? state;
 
   /// 厂商与型号描述（`printer-make-and-model`）。

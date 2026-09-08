@@ -20,7 +20,7 @@
   - `airPrint` —— 有 URF；交还系统打印面板。
   - `ippDirect` —— 无 URF 但 `pdl` 含 `image/pwg-raster`；可由本包直连打印。
   - `vendorOnly` —— 仅厂商私有格式；引导用户使用厂商 App。
-- **IPP 1.1 客户端**（RFC 2910 / RFC 8011）：`Print-Job`、`Get-Printer-Attributes`、`Get-Job-Attributes`、`Get-Jobs`、`Cancel-Job`；作业状态轮询带瞬态故障容错。
+- **IPP 1.1 客户端**（RFC 8010 / RFC 8011）：`Print-Job`、`Get-Printer-Attributes`、`Get-Job-Attributes`、`Get-Jobs`、`Cancel-Job`；作业状态轮询带瞬态故障容错。
 - **TLS 传输** —— 仅广播 `_ipps._tcp` 的机型可直接打印（`https://` 端点，默认接受自签证书）。
 - **PWG-raster 编码器**（PWG 5102.4）：36 字节 RaS2 页头 + 行程编码行，sRGB-8 —— 由金标字节测试锚定。
 - **纯 Dart，零 Flutter 依赖** —— 协议核心可离线单测；PDF 栅格化通过 `PdfRasterizer` 端口注入（例如由 `printing` 的 `rasterPdf` 实现）。
@@ -108,11 +108,16 @@ if (status == PrinterProbeStatus.ready) {
 
 | 实现决策 | 标准依据 | 条款 |
 |---|---|---|
-| 编码序 tag → name-len → name → value-len → value | RFC 2910（IPP/1.1 Encoding） | §3.1.1 |
-| 同名多值 = tag + 零长度名 | RFC 2910 | §3.1.4.2 |
+| 编码序 tag → name-len → name → value-len → value | RFC 8010（IPP/1.1 编码与传输；废止 RFC 2910） | §3.1.4 |
+| 同名多值 = tag + 零长度名 | RFC 8010 | §3.1.5 |
 | 请求必含 attributes-charset / attributes-natural-language / printer-uri | RFC 8011（IPP/1.1 Model） | §4.1.4、Appendix A |
+| 操作码（Print-Job 0x0002、Cancel-Job 0x0008、Get-Job-Attributes 0x0009、Get-Jobs 0x000A、Get-Printer-Attributes 0x000B） | RFC 8011 + IANA IPP 注册表 | §5.4.15 |
+| boolean 值恒 1 字节（0x00/0x01） | RFC 8011 | §5.1.12 |
 | job-state 值域 3–9 | RFC 8011 / IPP Guide | §5.3.7 |
-| printer-state 值域 3–5 | RFC 8011 | §5.4.12 |
+| printer-state 值域 3–5 | RFC 8011 | §5.4.11 |
+| `Cancel-Job`（job-id 必需） | RFC 8011 / IPP Guide | §4.3.3、Appendix A |
+| `Get-Jobs`（which-jobs / my-jobs / requested-attributes） | RFC 8011 / IPP Guide | §4.2.6、Appendix A |
+| `ipps://` 传输（IPP over HTTPS + ipps URI scheme） | RFC 7472 | §3–4 |
 | PWG-raster 页头（RaS2，36 字节，sRGB-8=19） | PWG 5102.4 | — |
 | 介质自描述名 `iso_a4_210x297mm` | PWG 5101.1（Media Names） | — |
 | 浏览 `_ipp._tcp` / `_ipps._tcp` / `_universal._sub._ipp._tcp` | RFC 6763（DNS-SD）+ Apple AirPrint 规约 | — |
@@ -120,7 +125,7 @@ if (status == PrinterProbeStatus.ready) {
 | `printer-uri` 用 `ipp://` 逻辑 URI，HTTP `POST application/ipp` | IPP Guide（istopwg） | Ch. 1 |
 | 查询 `media-supported` / `document-format-supported` 能力 | IPP Guide | Ch. 2 |
 
-参考：RFC 2910 / RFC 8011（IETF）、PWG 5101.1 / 5101.2 / 5102.4（PWG）、
+参考：RFC 8010 / RFC 8011 / RFC 7472（IETF）、PWG 5101.1 / 5101.2 / 5102.4（PWG）、
 [IPP Guide](https://istopwg.github.io/ipp/ippguide.html)、
 [IANA IPP Registrations](https://www.iana.org/assignments/ipp-registrations/)、
 Apple TN3179。HP 官方 [jipp](https://github.com/HPInc/jipp) 与 istopwg 指南

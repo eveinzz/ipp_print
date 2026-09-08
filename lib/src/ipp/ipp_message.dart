@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import '../models.dart';
 
-/// IPP 1.1（RFC 8011/RFC 2910）报文编解码。
+/// IPP 1.1（RFC 8011/RFC 8010）报文编解码。
 ///
 /// 只实现本项目需要的三种操作：Print-Job、Get-Printer-Attributes、
 /// Get-Job-Attributes；值编码覆盖 keyword/integer/enum/boolean/name/
@@ -233,10 +233,10 @@ class IppGroup {
   /// 组分隔 tag（0x01 operation / 0x02 job / 0x04 printer / 0x05 …）。
   final int tag;
 
-  /// 组内属性：同名多值时列表按序追加（RFC 2910 §3.1.4.2）。
+  /// 组内属性：同名多值时列表按序追加（RFC 8010 §3.1.3）。
   final Map<String, List<IppValue>> attributes = {};
 
-  /// 同名追加即多值（RFC 2910：后续值零长度名）。
+  /// 同名追加即多值（RFC 8010：后续值零长度名）。
   void add(String name, IppValue value) =>
       attributes.putIfAbsent(name, () => <IppValue>[]).add(value);
 }
@@ -280,7 +280,7 @@ class _Builder {
     return this;
   }
 
-  /// RFC 2910 §3.1.1 编码序：value-tag → name-len → name → value-len
+  /// RFC 8010 §3.1.4 编码序：value-tag → name-len → name → value-len
   /// → value。value-tag 必须在 name 之前。
   _Builder attr(int tag, String name, Object value) {
     if (_currentGroup < 0) group(IppCodec.tagOperationGroup);
@@ -294,7 +294,7 @@ class _Builder {
     return this;
   }
 
-  /// 同名多值：首个用 attr()，后续值走 tag + 零长度名（RFC 2910 §3.1.4.2）。
+  /// 同名多值：首个用 attr()，后续值走 tag + 零长度名（RFC 8010 §3.1.5）。
   _Builder attrOrValue(int tag, String name, Object value) {
     if (_lastName != name) return attr(tag, name, value);
     _body.addByte(tag);
@@ -317,7 +317,7 @@ class _Builder {
   void _writeValue(Object value, {required bool asInteger}) {
     final Uint8List vb;
     if (value is bool) {
-      // RFC 8011 §5.1.22：boolean 值恒 1 字节（0x00/0x01）。
+      // RFC 8011 §5.1.12：boolean 语法；线编码恒 1 字节（0x00/0x01）。
       vb = Uint8List(1)..[0] = value ? 1 : 0;
     } else if (asInteger && value is int) {
       vb = Uint8List(4)

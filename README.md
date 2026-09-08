@@ -20,7 +20,7 @@ A large class of inkjet printers (e.g. Epson's L-series tank printers) advertise
   - `airPrint` — has URF; hand over to the OS print panel.
   - `ippDirect` — no URF but `pdl` contains `image/pwg-raster`; printable via this package.
   - `vendorOnly` — vendor-private formats only; guide the user to a vendor app.
-- **IPP 1.1 client** (RFC 2910 / RFC 8011): `Print-Job`, `Get-Printer-Attributes`, `Get-Job-Attributes`, `Get-Jobs`, `Cancel-Job`; job-state polling with transient-fault tolerance.
+- **IPP 1.1 client** (RFC 8010 / RFC 8011): `Print-Job`, `Get-Printer-Attributes`, `Get-Job-Attributes`, `Get-Jobs`, `Cancel-Job`; job-state polling with transient-fault tolerance.
 - **TLS transport** — printers advertising only `_ipps._tcp` are directly printable (`https://` endpoint, self-signed certificates accepted by default).
 - **PWG-raster encoder** (PWG 5102.4): 36-byte RaS2 header, run-length rows, sRGB-8 — validated by golden-byte tests.
 - **Pure Dart, zero Flutter dependencies** — the protocol core is unit-testable offline; PDF rasterization is injected through the `PdfRasterizer` port (e.g. backed by `printing`'s `rasterPdf`).
@@ -108,11 +108,16 @@ Every protocol behavior traces back to an authoritative source; community implem
 
 | Decision | Standard | Clause |
 |---|---|---|
-| Encoding order tag → name-len → name → value-len → value | RFC 2910 (IPP/1.1 Encoding) | §3.1.1 |
-| Multi-valued attribute = tag + zero-length name | RFC 2910 | §3.1.4.2 |
+| Encoding order tag → name-len → name → value-len → value | RFC 8010 (IPP/1.1 Encoding & Transport; obsoletes RFC 2910) | §3.1.4 |
+| Multi-valued attribute = tag + zero-length name | RFC 8010 | §3.1.5 |
 | Requests must include attributes-charset / attributes-natural-language / printer-uri | RFC 8011 (IPP/1.1 Model) | §4.1.4, Appendix A |
+| Operation codes (Print-Job 0x0002, Cancel-Job 0x0008, Get-Job-Attributes 0x0009, Get-Jobs 0x000A, Get-Printer-Attributes 0x000B) | RFC 8011 + IANA IPP Registrations | §5.4.15 |
+| Boolean values are always 1 byte (0x00/0x01) | RFC 8011 | §5.1.12 |
 | job-state values 3–9 | RFC 8011 / IPP Guide | §5.3.7 |
-| printer-state values 3–5 | RFC 8011 | §5.4.12 |
+| printer-state values 3–5 | RFC 8011 | §5.4.11 |
+| `Cancel-Job` (job-id required) | RFC 8011 / IPP Guide | §4.3.3, Appendix A |
+| `Get-Jobs` (which-jobs / my-jobs / requested-attributes) | RFC 8011 / IPP Guide | §4.2.6, Appendix A |
+| `ipps://` transport (IPP over HTTPS + ipps URI scheme) | RFC 7472 | §3–4 |
 | PWG-raster page header (RaS2, 36 B, sRGB-8 = 19) | PWG 5102.4 | — |
 | Self-describing media names `iso_a4_210x297mm` | PWG 5101.1 (Media Names) | — |
 | Browsing `_ipp._tcp` / `_ipps._tcp` / `_universal._sub._ipp._tcp` | RFC 6763 (DNS-SD) + Apple AirPrint spec | — |
@@ -120,7 +125,7 @@ Every protocol behavior traces back to an authoritative source; community implem
 | `ipp://` logical URI for printer-uri, HTTP `POST application/ipp` | IPP Guide (istopwg) | Ch. 1 |
 | Querying `media-supported` / `document-format-supported` | IPP Guide | Ch. 2 |
 
-References: RFC 2910 / RFC 8011 (IETF), PWG 5101.1 / 5101.2 / 5102.4 (PWG),
+References: RFC 8010 / RFC 8011 / RFC 7472 (IETF), PWG 5101.1 / 5101.2 / 5102.4 (PWG),
 [IPP Guide](https://istopwg.github.io/ipp/ippguide.html),
 [IANA IPP Registrations](https://www.iana.org/assignments/ipp-registrations/),
 Apple TN3179. HP's [jipp](https://github.com/HPInc/jipp) and the istopwg guide

@@ -311,6 +311,39 @@ void main() {
       throwsA(isA<Exception>()),
     );
   });
+
+  test('waitForTerminalState：TLS 握手抖动（HandshakeException）被瞬态吸收',
+      () async {
+    // ipps 打印机在局域网常见 TLS 握手瞬时失败；轮询必须吸收而非中断。
+    var calls = 0;
+    final flaky = _HandshakeFlakyClient(() {
+      calls++;
+      if (calls <= 2) throw HandshakeException('transient flap');
+      return IppJobState.completed;
+    });
+    final state = await flaky.waitForTerminalState(
+      printer,
+      42,
+      interval: const Duration(milliseconds: 10),
+    );
+    expect(state, IppJobState.completed);
+    expect(calls, 3); // 2 次握手抖动 + 1 次成功
+  });
+
+  test('waitForTerminalState：握手连续失败超过上限 → 抛出（容错有界）',
+      () async {
+    final alwaysFails =
+        _HandshakeFlakyClient(() => throw HandshakeException('down'));
+    await expectLater(
+      alwaysFails.waitForTerminalState(
+        printer,
+        42,
+        interval: const Duration(milliseconds: 10),
+        maxTransientErrors: 2,
+      ),
+      throwsA(isA<HandshakeException>()),
+    );
+  });
 }
 
 List<int> _httpResponse(List<int> ippBody) {
@@ -321,6 +354,18 @@ List<int> _httpResponse(List<int> ippBody) {
     ...'$head${ippBody.length}\r\nConnection: close\r\n\r\n'.codeUnits,
     ...ippBody,
   ];
+}
+
+/// 注入握手抖动的客户端：仅覆写 getJobState 注入 HandshakeException，
+/// waitForTerminalState 走被测的真实实现。
+class _HandshakeFlakyClient extends IppClient {
+  _HandshakeFlakyClient(this.behavior) : super();
+
+  final IppJobState Function() behavior;
+
+  @override
+  Future<IppJobState> getJobState(DiscoveredPrinter p, int jobId) async =>
+      behavior();
 }
 
 // _ippResponse 保留占位避免 lint unused —— 实际未被引用，删除。

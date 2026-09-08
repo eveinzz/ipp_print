@@ -6,7 +6,7 @@
 ## P1
 
 - [x] **`ipps://`（TLS）传输** —— 支持「仅广播 `_ipps._tcp`（无 `_ipp._tcp`）」的机型直连，
-  含自签证书策略。依据：IPP Guide Ch.1（HTTPS 即加密通道）。对应 README 边界 2。
+  含自签证书策略。依据：RFC 7472（IPP over HTTPS 传输绑定与 `ipps` URI scheme）。对应 README 边界 2。
   ✅ 0.1.0：`DiscoveredPrinter.secure` + `IppClient(acceptSelfSignedTls)`，
   同 UUID 双广播去重保留明文实例。
 - [x] **`Cancel-Job` / `Get-Jobs`** —— 作业管理操作
@@ -23,6 +23,9 @@
 - [ ] **分辨率 / 彩色 / 双面能力协商** —— 透出 `printer-resolution-supported`、
   `print-color-mode-supported`、`sides-supported` 作为宿主 UI 数据源
   （解除固定 300 dpi / sRGB-8 的限制）。
+- [ ] **TLS 正路径测试** —— 用 `HttpServer.bindSecure` 起自签 TLS 服务器，
+  验证 `acceptSelfSignedTls` 的接受路径（现有测试只覆盖「连明文应握手失败」
+  的负路径）。
 
 ## P3
 
@@ -33,6 +36,12 @@
 - [ ] **模型层目录化** —— 若 `lib/src/models.dart` 超过约 400 行，
   拆为 `models/printer.dart` / `models/options.dart` / `models/exceptions.dart`，
   对外 API 不变。
+- [ ] **`getJobs` 缺失属性不静默** —— 当前 job 组缺 `job-id`/`job-state`
+  时静默取 0/pending，可能掩盖解析异常；改为跳过脏组或透出可空字段。
+- [ ] **`discover()` 耗时上限** —— 顺序浏览 3 类服务型最坏 3×timeout
+  （默认 15s）；改为并行浏览或单窗口聚合，控制发现耗时。
+- [ ] **清理冗余调用** —— `printerUri.toString()`（String 上是 no-op）
+  等零成本卫生项。
 
 ## 工程纪律（内部约定）
 
