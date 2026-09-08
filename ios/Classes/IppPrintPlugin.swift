@@ -55,7 +55,7 @@ final class DiscoverJob: NSObject, NetServiceBrowserDelegate, NetServiceDelegate
       let type = rawType.hasSuffix(".") ? rawType : rawType + "."
       let browser = NetServiceBrowser()
       browser.delegate = self
-      browser.search(forServicesOfType: type, inDomain: "local.")
+      browser.searchForServices(ofType: type, inDomain: "local.")
       browsers.append(browser)
     }
     DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(timeoutMs)) { [weak self] in
