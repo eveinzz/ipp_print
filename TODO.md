@@ -23,6 +23,14 @@
 - [ ] **分辨率 / 彩色 / 双面能力协商** —— 透出 `printer-resolution-supported`、
   `print-color-mode-supported`、`sides-supported` 作为宿主 UI 数据源
   （解除固定 300 dpi / sRGB-8 的限制）。
+- [ ] **彩色打印默认值** —— 真机验证（EPSON L3250 彩色机型）出纸为黑白。
+  代码级根因：`PrintOptions.colorMode` 默认 `'monochrome'`（models.dart），
+  经 `buildPrintJob` 以 job 属性 `print-color-mode` 显式下发，打印机遵照执行。
+  目标：支持彩色则默认彩色，仅单色则黑白。路径：`Get-Printer-Attributes` 增加
+  `print-color-mode-supported` 请求并解析（`color`/`auto`/`monochrome`），
+  默认策略 `含 color → color，含 auto → auto，否则 monochrome`
+  （IPP `print-color-mode` job template attribute，PWG 5107.3）；
+  `auto` 在入门机型上的实际行为需真机验证，禁止想当然。
 - [ ] **TLS 正路径测试** —— 用 `HttpServer.bindSecure` 起自签 TLS 服务器，
   验证 `acceptSelfSignedTls` 的接受路径（现有测试只覆盖「连明文应握手失败」
   的负路径）。
@@ -31,8 +39,10 @@
 
 - [ ] **Basic / Digest 认证** —— 按 `uri-authentication-supported` 协商
   （IPP Guide Ch.2）。
-- [ ] **HTTP 426 Upgrade 处理** —— 明文 → TLS 升级路径
+- [x] **HTTP 426 Upgrade 处理** —— 明文 → TLS 升级路径
   （RFC 8011 / IPP Everywhere）。
+  ✅ 0.2：`IppClient.post` 明文遇 426 自动以 `https` 同端口重试一次
+  （真机 EPSON L3250 验证）。
 - [ ] **模型层目录化** —— 若 `lib/src/models.dart` 超过约 400 行，
   拆为 `models/printer.dart` / `models/options.dart` / `models/exceptions.dart`，
   对外 API 不变。

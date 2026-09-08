@@ -5,44 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0]
-
-### Added
-
-- **Native Bonjour discovery on iOS/macOS** (`NativeBonjourDiscovery`,
-  `IppPrintPlugin`): browsing now goes through the system Bonjour
-  framework (mDNSResponder), which is exempt from the iOS 14+ multicast
-  entitlement that silently blocks raw-socket mDNS (`multicast_dns`).
-  Discovery is routed by platform automatically (`defaultPlatformDiscovery`):
-  Apple platforms use the native path, all others keep `multicast_dns`.
-  Requires only the standard Local Network permission.
-
-### Changed
-
-- Package converted from pure Dart to a Flutter plugin (adds native
-  `ios/` and `macos/` pods); the IPP transport core remains pure Dart.
-
-## [0.2.0]
-
-### Added
-
-- **Native Bonjour discovery on iOS/macOS** (`NativeBonjourDiscovery`,
-  `IppPrintPlugin`): browsing now goes through the system Bonjour
-  framework (mDNSResponder), which is exempt from the iOS 14+ multicast
-  entitlement that silently blocks raw-socket mDNS (`multicast_dns`).
-  Discovery is routed by platform automatically (`defaultPlatformDiscovery`):
-  Apple platforms use the native path, all others keep `multicast_dns`.
-  Requires only the standard Local Network permission.
-
-### Changed
-
-- Package converted from pure Dart to a Flutter plugin (adds native
-  `ios/` and `macos/` pods); the IPP transport core remains pure Dart.
-
 ## [Unreleased]
 
 ### Added
 
+- Debug diagnostics (`ippLog`, `ippProbeLog`, `#if DEBUG` only): discovery
+  lifecycle (`register` / `discover start` / `didFind` / `resolved` with the
+  resolved host / `didNotResolve` / `didNotSearch` / finish summary) and
+  probe outcomes, so real-device debugging is no longer a black box.
+- HTTP 426 (`Upgrade Required`) auto-upgrade: a plaintext `ipp://` POST
+  rejected with 426 by a TLS-only printer is retried once over `https://`
+  on the same port (RFC 2817 spirit). Real-printer verified on the
+  TLS-only EPSON L3250.
+
+### Fixed
+
+- **Native discovery: resolved `NetService` was not retained** — the
+  delegate callback's service was released by ARC as soon as the browser
+  delegate method returned, silently cancelling `resolve` (with no
+  `didNotResolve` callback). Resolving services are now strongly retained
+  and released on completion/failure. Real-device verified: 2 found →
+  2 resolved.
+- **Probe hang guard**: `Get-Printer-Attributes` during probe is bounded
+  by a 10 s timeout; `TimeoutException`/`SocketException` map to
+  `offline`, `IppPrintException` maps to `unsupported` (previously a
+  half-open TCP connection could hang the probe indefinitely).
+- **PWG-raster encoder rewritten to the normative wire format**
+  (PWG 5102.4 §4 / CUPS `raster.h` + `raster-stream.c`, verified against
+  the primary sources):
+  - page header expanded from a 36-byte shorthand to the full
+    **1796-octet `cups_page_header2_t` line format** (the missing
+    `cupsBytesPerLine` etc. made the printer mis-decode row data —
+    real printer returned `0x0411 client-error-document-format-error`);
+  - `RaS2` sync word moved to **file level** (once per document, §4 /
+    Figure 1) — it is not part of `encodePage`;
+  - PackBits-like run encoding confirmed at **pixel granularity**
+    (bpp = 3 for sRGB-24) with row groups (1-octet row repeat count,
+    1–256 rows), matching CUPS `cups_raster_write` line by line;
+  - encoder is now validated **byte-for-byte against the spec's own
+    §4.4.2 sample bitmap** in addition to the existing golden tests.
+- Swift delegate method names for the current SDK
+  (`netServiceBrowser(_:didFind:moreComing:)`,
+  `searchForServices(ofType:)`, `TXTRecordData`), verified via
+  `swiftc -typecheck` on both platforms.
+
+## [0.2.0]
+
+### Added
+
+- **Native Bonjour discovery on iOS/macOS** (`NativeBonjourDiscovery`,
+  `IppPrintPlugin`): browsing now goes through the system Bonjour
+  framework (mDNSResponder), which is exempt from the iOS 14+ multicast
+  entitlement that silently blocks raw-socket mDNS (`multicast_dns`).
+  Discovery is routed by platform automatically (`defaultPlatformDiscovery`):
+  Apple platforms use the native path, all others keep `multicast_dns`.
+  Requires only the standard Local Network permission.
 - TLS transport (`ipps://`): printers advertising only `_ipps._tcp` are now
   directly printable; `DiscoveredPrinter.secure` selects the logical
   `ipps://` URI and the `https://` endpoint; self-signed certificates are
@@ -52,6 +69,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Job management: `Cancel-Job` (`IppClient.cancelJob`) and `Get-Jobs`
   (`IppClient.getJobs` → `List<IppJobSummary>`), exposed on the `IppPrint`
   facade, with boolean value encoding per RFC 8011 §5.1.12.
+
+### Changed
+
+- Package converted from pure Dart to a Flutter plugin (adds native
+  `ios/` and `macos/` pods); the IPP transport core remains pure Dart.
 
 ### Fixed
 
@@ -83,8 +105,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - IPP transport client over `dart:io` `HttpClient`
   (`POST application/ipp`, plaintext `ipp://:631`), with transient-fault
   tolerant job-state polling (RFC 8011 §5.3.7 job-state values).
-- PWG-Raster encoder (PWG 5102.4): 36-byte RaS2 header + run-length rows,
-  sRGB-8, golden-byte tests.
+- PWG-Raster encoder (PWG 5102.4) initial version: sRGB-8, golden-byte tests.
 - Facade API: `discover` / `probe` / `printPdf` with a progress stream and
   an injectable `PdfRasterizer` interface (no Flutter dependency in the
   package core; rasterization is provided by the host, e.g. via

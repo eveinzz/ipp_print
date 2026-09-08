@@ -106,6 +106,8 @@ class IppPrint {
     }
     yield const PrintProgress(PrintStage.rasterizing);
     final document = BytesBuilder(copy: false);
+    // PWG 5102.4 Figure 1：同步字为文件级，整个文档只出现一次。
+    document.add(_encoder.syncWordBytes);
     var pageNo = 0;
     await for (final page in rasterizer.rasterize(pdfBytes, dpi: _dpi)) {
       pageNo++;

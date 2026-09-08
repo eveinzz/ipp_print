@@ -23,6 +23,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  meta: ^1.12.0
   multicast_dns: ^0.3.2+7
 
 dev_dependencies:
