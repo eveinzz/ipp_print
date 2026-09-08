@@ -7,9 +7,8 @@ description: >-
 version: 0.1.0
 # 发布日移除本行（当前保持禁发，防误发布）。
 publish_to: none
-# TODO(publish): 替换为真实仓库地址后移除 publish_to。
-repository: https://github.com/REPLACE-ME/ipp_print
-issue_tracker: https://github.com/REPLACE-ME/ipp_print/issues
+repository: https://github.com/eveinzz/ipp_print
+issue_tracker: https://github.com/eveinzz/ipp_print/issues
 topics:
   - printing
   - ipp
