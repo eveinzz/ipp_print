@@ -18,6 +18,8 @@
 核心协议在任何平台都是 **mDNS/DNS-SD（[RFC 6762](https://www.rfc-editor.org/rfc/rfc6762) / [RFC 6763](https://www.rfc-editor.org/rfc/rfc6763)）**，不同的只是抵达组播层的通道：
 
 - **iOS / macOS —— 原生系统 Bonjour。** 自 iOS 14 起，裸 socket 组播流量会被系统**静默过滤**，除非 App 持有 `com.apple.developer.networking.multicast` 特批 entitlement（Apple 仅按申请特批，见 [TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)）。朴素的 mDNS 实现在 iOS 上因此 0 发现——且无任何报错。本包改走系统 Bonjour 框架（[`NSNetServiceBrowser`](https://developer.apple.com/documentation/foundation/nsnetservicebrowser)）：组播由 `mDNSResponder` 守护进程代收，豁免该权限，只需标准的「本地网络」授权弹窗——无需任何特殊 entitlement。（细节：`NSNetServiceBrowser` 不支持 `_universal._sub._ipp._tcp` 子类型；`_ipp`/`_ipps` 双广播已覆盖相同实例，按 UUID 去重。）
+
+> **弃用状态**（已对照 iOS 26.2 SDK 头文件与 `Availability.h` 官方语义核实）：`NSNetServiceBrowser` 处于**软弃用**——`API_TO_BE_DEPRECATED`，即将在后续版本正式弃用、未分配版本号、当前无编译器警告。官方建议的继任者 `nw_browser_t` 要求 iOS 13 / macOS 10.15，而本包最低部署目标为 iOS 12 / macOS 10.14。迁移事项见 [TODO.md](TODO.md)。
 - **Android / Linux / Windows —— `multicast_dns`**（裸 UDP 5353）。Android 的 Wi-Fi 栈默认过滤组播包，宿主 App 必须持有 `WifiManager.MulticastLock`（见 [Android 官方文档](https://developer.android.com/reference/android/net/wifi/WifiManager.MulticastLock)），否则发现层收不到任何响应。
 
 平台路由自动完成（`defaultPlatformDiscovery()`）；注入自定义 `PrinterDiscovery` 即可覆盖。

@@ -45,6 +45,18 @@
 
 ## P3
 
+- [ ] **评估发现层迁移 `NSNetServiceBrowser` → `NWBrowser`（Network.framework）** ——
+  现状（iOS 26.2 SDK 头文件一手核实）：`NSNetServiceBrowser` 处于**软弃用**
+  （`API_DEPRECATED("Use nw_browser_t in Network framework instead",
+  ios(2.0, API_TO_BE_DEPRECATED), macos(10.2, API_TO_BE_DEPRECATED))`；
+  `Availability.h` 官方语义：将在「即将到来的版本」正式弃用，**未分配版本号、
+  无移除时间表、当前无编译器警告**；watchOS 不可用——本插件不涉及）。
+  继任者 `nw_browser_t`/`NWBrowser` 可用性 **iOS 13.0 / macOS 10.15+**
+  （`Network.framework/Headers/browser.h`）。
+  影响范围：插件最低部署目标需从 **iOS 12.0 / macOS 10.14**（podspec 现值）
+  抬升至 iOS 13.0 / macOS 10.15。功能面等价（Bonjour 服务浏览/解析），
+  迁移属「编译警告预案」而非功能需求，**无时间压力**。
+  触发条件：Apple 公布正式弃用版本号（编译警告出现）或最低部署目标抬升决策。
 - [ ] **Basic / Digest 认证** —— 按 `uri-authentication-supported` 协商
   （IPP Guide Ch.2）。
 - [x] **HTTP 426 Upgrade 处理** —— 明文 → TLS 升级路径
