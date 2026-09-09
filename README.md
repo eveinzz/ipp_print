@@ -15,9 +15,9 @@ A large class of inkjet printers (e.g. Epson's L-series tank printers) advertise
 
 ## Discovery: one protocol, two transports
 
-The core protocol is **mDNS/DNS-SD (RFC 6762 / 6763)** on every platform; only the transport to it differs:
+The core protocol is **mDNS/DNS-SD ([RFC 6762](https://www.rfc-editor.org/rfc/rfc6762) / [RFC 6763](https://www.rfc-editor.org/rfc/rfc6763))** on every platform; only the transport to it differs:
 
-- **iOS / macOS — native system Bonjour.** Since iOS 14, raw-socket multicast is silently filtered unless the app holds the `com.apple.developer.networking.multicast` entitlement, which Apple grants only by special request (Apple TN3179). Naive mDNS implementations therefore discover nothing on iOS — with no error. This package routes browsing through the system Bonjour framework (`NSNetServiceBrowser`): the `mDNSResponder` daemon does the multicasting, so only the standard Local Network permission prompt is required — no special entitlement. (Detail: `NSNetServiceBrowser` does not support the `_universal._sub._ipp._tcp` subtype; the `_ipp`/`_ipps` pair covers the same instances, deduplicated by UUID.)
+- **iOS / macOS — native system Bonjour.** Since iOS 14, raw-socket multicast is silently filtered unless the app holds the `com.apple.developer.networking.multicast` entitlement, which Apple grants only by special request ([Apple TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)). Naive mDNS implementations therefore discover nothing on iOS — with no error. This package routes browsing through the system Bonjour framework ([`NSNetServiceBrowser`](https://developer.apple.com/documentation/foundation/nsnetservicebrowser)): the `mDNSResponder` daemon does the multicasting, so only the standard Local Network permission prompt is required — no special entitlement. (Detail: `NSNetServiceBrowser` does not support the `_universal._sub._ipp._tcp` subtype; the `_ipp`/`_ipps` pair covers the same instances, deduplicated by UUID.)
 - **Android / Linux / Windows — `multicast_dns`** (raw UDP 5353). On Android the Wi-Fi stack filters multicast packets by default; the host app must acquire a `WifiManager.MulticastLock` (see the [official Android docs](https://developer.android.com/reference/android/net/wifi/WifiManager.MulticastLock)) or discovery will receive nothing.
 
 Routing is automatic (`defaultPlatformDiscovery()`); inject a custom `PrinterDiscovery` to override it.
@@ -138,7 +138,7 @@ Discovery triggers the local-network privacy prompt. Declare in `Info.plist`:
 </array>
 ```
 
-(See Apple TN3179, *Understanding local network privacy*.)
+(See [Apple TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy), *Understanding local network privacy*.)
 
 ## Implementation decisions ← standards mapping
 
@@ -163,10 +163,13 @@ Every protocol behavior traces back to an authoritative source; community implem
 | `ipp://` logical URI for printer-uri, HTTP `POST application/ipp` | IPP Guide (istopwg) | Ch. 1 |
 | Querying `media-supported` / `document-format-supported` | IPP Guide | Ch. 2 |
 
-References: RFC 8010 / RFC 8011 / RFC 7472 (IETF), PWG 5101.1 / 5101.2 / 5102.4 (PWG),
+References: RFC 8010 / RFC 8011 / RFC 6762 (mDNS) / RFC 6763 (DNS-SD) /
+RFC 7472 (IETF), PWG 5101.1 / 5101.2 / 5102.4 (PWG),
 [IPP Guide](https://istopwg.github.io/ipp/ippguide.html),
 [IANA IPP Registrations](https://www.iana.org/assignments/ipp-registrations/),
-Apple TN3179. HP's [jipp](https://github.com/HPInc/jipp) and the istopwg guide
+[Apple TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)
+and the [`NSNetServiceBrowser` API reference](https://developer.apple.com/documentation/foundation/nsnetservicebrowser).
+HP's [jipp](https://github.com/HPInc/jipp) and the istopwg guide
 serve as capability checklists.
 
 ## Limitations

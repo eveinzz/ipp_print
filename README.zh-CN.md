@@ -15,9 +15,9 @@
 
 ## 发现：一个协议，两条传输路径
 
-核心协议在任何平台都是 **mDNS/DNS-SD（RFC 6762 / 6763）**，不同的只是抵达组播层的通道：
+核心协议在任何平台都是 **mDNS/DNS-SD（[RFC 6762](https://www.rfc-editor.org/rfc/rfc6762) / [RFC 6763](https://www.rfc-editor.org/rfc/rfc6763)）**，不同的只是抵达组播层的通道：
 
-- **iOS / macOS —— 原生系统 Bonjour。** 自 iOS 14 起，裸 socket 组播流量会被系统**静默过滤**，除非 App 持有 `com.apple.developer.networking.multicast` 特批 entitlement（Apple 仅按申请特批，见 TN3179）。朴素的 mDNS 实现在 iOS 上因此 0 发现——且无任何报错。本包改走系统 Bonjour 框架（`NSNetServiceBrowser`）：组播由 `mDNSResponder` 守护进程代收，豁免该权限，只需标准的「本地网络」授权弹窗——无需任何特殊 entitlement。（细节：`NSNetServiceBrowser` 不支持 `_universal._sub._ipp._tcp` 子类型；`_ipp`/`_ipps` 双广播已覆盖相同实例，按 UUID 去重。）
+- **iOS / macOS —— 原生系统 Bonjour。** 自 iOS 14 起，裸 socket 组播流量会被系统**静默过滤**，除非 App 持有 `com.apple.developer.networking.multicast` 特批 entitlement（Apple 仅按申请特批，见 [TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)）。朴素的 mDNS 实现在 iOS 上因此 0 发现——且无任何报错。本包改走系统 Bonjour 框架（[`NSNetServiceBrowser`](https://developer.apple.com/documentation/foundation/nsnetservicebrowser)）：组播由 `mDNSResponder` 守护进程代收，豁免该权限，只需标准的「本地网络」授权弹窗——无需任何特殊 entitlement。（细节：`NSNetServiceBrowser` 不支持 `_universal._sub._ipp._tcp` 子类型；`_ipp`/`_ipps` 双广播已覆盖相同实例，按 UUID 去重。）
 - **Android / Linux / Windows —— `multicast_dns`**（裸 UDP 5353）。Android 的 Wi-Fi 栈默认过滤组播包，宿主 App 必须持有 `WifiManager.MulticastLock`（见 [Android 官方文档](https://developer.android.com/reference/android/net/wifi/WifiManager.MulticastLock)），否则发现层收不到任何响应。
 
 平台路由自动完成（`defaultPlatformDiscovery()`）；注入自定义 `PrinterDiscovery` 即可覆盖。
@@ -138,7 +138,7 @@ if (status == PrinterProbeStatus.ready) {
 </array>
 ```
 
-（参见 Apple TN3179《理解本地网络隐私》。）
+（参见 [Apple TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)《理解本地网络隐私》。）
 
 ## 实现决策 ← 标准条款对照
 
@@ -163,10 +163,13 @@ if (status == PrinterProbeStatus.ready) {
 | `printer-uri` 用 `ipp://` 逻辑 URI，HTTP `POST application/ipp` | IPP Guide（istopwg） | Ch. 1 |
 | 查询 `media-supported` / `document-format-supported` 能力 | IPP Guide | Ch. 2 |
 
-参考：RFC 8010 / RFC 8011 / RFC 7472（IETF）、PWG 5101.1 / 5101.2 / 5102.4（PWG）、
+参考：RFC 8010 / RFC 8011 / RFC 6762（mDNS）/ RFC 6763（DNS-SD）/ RFC 7472（IETF）、
+PWG 5101.1 / 5101.2 / 5102.4（PWG）、
 [IPP Guide](https://istopwg.github.io/ipp/ippguide.html)、
 [IANA IPP Registrations](https://www.iana.org/assignments/ipp-registrations/)、
-Apple TN3179。HP 官方 [jipp](https://github.com/HPInc/jipp) 与 istopwg 指南
+[Apple TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)
+与 [`NSNetServiceBrowser` API 文档](https://developer.apple.com/documentation/foundation/nsnetservicebrowser)。
+HP 官方 [jipp](https://github.com/HPInc/jipp) 与 istopwg 指南
 作为能力清单核对基准。
 
 ## 边界（诚实清单）
