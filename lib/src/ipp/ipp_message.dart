@@ -76,7 +76,7 @@ class IppCodec {
     // ipp-attribute-fidelity 是 **Operation Attribute**（RFC 8011 §4.2.1.1
     // Group 1 定义；0.6 修复：原误写入 Group 2 job template 组）。
     // bestEffort → 不下发（打印机按默认 false 处理）；exact → 显式 true
-    // （任一 job template 值不被支持则拒绝整个作业，§5.2.2）。
+    // （任一 job template 值不被支持则拒绝整个作业，§4.2.1.1）。
     if (options.fidelity != null) {
       b.attr(tagBoolean, 'ipp-attribute-fidelity',
           options.fidelity == PrintFidelity.exact);

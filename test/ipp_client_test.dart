@@ -397,9 +397,9 @@ void main() {
       _attr(0x35, 'printer-resolution-supported', res(300, 300, 3)) +
           _raw(0x35, res(600, 600, 3)),
       _attr(0x35, 'printer-resolution-default', res(300, 300, 3)),
-      // rangeOfInteger 语法：两个 i32，RFC 8011 §5.1.15
+      // rangeOfInteger 语法：两个 i32，RFC 8011 §5.1.14
       _attr(0x33, 'copies-supported', range(1, 99)),
-      // finishings-supported = 1setOf type2 enum（RFC 8011 §5.2.3）
+      // finishings-supported = 1setOf type2 enum（RFC 8011 §5.2.6）
       _attr(0x23, 'finishings-supported', _i32(3)),
       _attr(0x44, 'ipp-versions-supported', _s('1.1')),
       _attr(0x23, 'operations-supported', _i32(0x0002)) +

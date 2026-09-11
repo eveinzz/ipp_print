@@ -58,7 +58,7 @@ void main() {
     });
   });
 
-  group('fidelity / printer-resolution 线格式（RFC 8011 §5.2.2/§5.1.14）', () {
+  group('fidelity / printer-resolution 线格式（RFC 8011 §4.2.1.1/§5.1.16）', () {
     Uint8List build(PrintOptions o) => IppCodec.buildPrintJob(
           printerUri: 'ipp://p:631/ipp/print',
           documentFormat: 'application/pdf',

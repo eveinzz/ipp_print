@@ -54,7 +54,8 @@ class IppPrint {
   /// 解析规则（诚实解析，不猜）：
   /// - scheme 白名单 ipp / ipps / http / https，其余抛 [IppPrintException]；
   /// - `secure` = ipps/https（传输加密）；逻辑 scheme 恒 ipp/ipps；
-  /// - 缺省端口：ipp/ipps = 631（RFC 2910/7472 IPP 标准端口）、
+  /// - 缺省端口：ipp/ipps = 631（RFC 8010 §4.1 IPP well-known port /
+  ///   RFC 7472 ipps 缺省端口）、
   ///   http/https = 80/443（HTTP 标准）；显式端口原样采用；
   /// - 空路径 → `/`（根端点合法，可达性交协商器裁决）；
   /// - 带 query/fragment 或缺 host → 拒绝（端点语义有歧义，不猜）。
@@ -84,7 +85,7 @@ class IppPrint {
         : switch (scheme) {
             'http' => 80,
             'https' => 443,
-            _ => 631, // ipp / ipps：RFC 2910/7472 IPP 标准端口
+            _ => 631, // ipp / ipps：RFC 8010 §4.1 / RFC 7472 缺省端口
           };
     final path = uri.path.isEmpty ? '/' : uri.path;
     final host = uri.host;

@@ -3,7 +3,7 @@ library;
 
 import 'dart:typed_data';
 
-/// 属性保真语义（RFC 8011 §5.2.2 `ipp-attribute-fidelity`，0.5 契约字段）。
+/// 属性保真语义（RFC 8011 §4.2.1.1 `ipp-attribute-fidelity`，0.5 契约字段）。
 ///
 /// - [bestEffort]（默认）：不发送 `ipp-attribute-fidelity`——打印机对
 ///   不支持的 job template 值可忽略/替换（`valid=true` ≠ 完全保真）；

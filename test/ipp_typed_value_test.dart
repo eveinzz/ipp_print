@@ -20,7 +20,7 @@ void main() {
     });
   });
 
-  group('IppValue.asRange（RFC 8011 §5.1.15）', () {
+  group('IppValue.asRange（RFC 8011 §5.1.14）', () {
     test('两个 int32（低、高）', () {
       // copies-supported = 1..99
       final r = v([

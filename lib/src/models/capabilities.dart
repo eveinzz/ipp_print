@@ -165,7 +165,7 @@ class PrinterCapabilities {
   /// `copies-supported`（rangeOfInteger 上界；null = 未声明）。
   final int? copiesMax;
 
-  /// `finishings-supported`（1setOf type2 **enum**，RFC 8011 §5.2.3：
+  /// `finishings-supported`（1setOf type2 **enum**，RFC 8011 §5.2.6：
   /// 3=none、4=staple…；原始 enum 值，不猜测映射语义）。
   final List<int> finishingsSupported;
 

@@ -15,7 +15,8 @@ Access & CORE FREEZE：补最后一个入口缺口（手动直连），内核封
   mDNS 被屏蔽 / 跨网段 / 已知地址场景。URI 本身即 IPP endpoint 存在性的
   用户断言——`probe` / `print` / `submit` 的 TXT 分类否定门对该端点豁免，
   能力判定仍交实时查询 + 协商器终审（probe 驱动，manual 不放松 ready 判据）。
-  解析诚实：scheme 白名单 ipp/ipps/http/https；缺省端口按 RFC 2910/7472
+  解析诚实：scheme 白名单 ipp/ipps/http/https；缺省端口按 RFC 8010 §4.1 /
+  RFC 7472
   （ipp/ipps = 631）与 HTTP 标准（80/443）；空路径 → `/`；带 query/fragment
   或缺 host → 拒绝（端点语义有歧义，不猜）。
 - `DiscoveredPrinter.manualEndpoint` 标志位（发现产物恒 false，豁免不外溢）。
@@ -94,7 +95,7 @@ Print Core Foundation（契约冻结 v1）：作业语义层成为可长期依�
 - **Typed IPP Value 基础层**：`IppValue.asBool` / `asRange` / `asResolution`
   （+ `IppResolution`，keyword 形态 `360x360dpi`）——inspect 定制解码上收。
 - `print()` 线格式新增：`ipp-attribute-fidelity`（fidelity=exact 时下发
-  true，RFC 8011 §5.2.2）与 `printer-resolution`（resolution 线语法 9 字节，
+  true，RFC 8011 §4.2.1.1）与 `printer-resolution`（resolution 线语法 9 字节，
   RFC 8011 §5.1.16）；缺省均不下发，既有作业字节零变化。
 
 ### Changed
