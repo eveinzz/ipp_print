@@ -62,7 +62,7 @@ class _Builder {
       // RFC 8011 §5.1.12：boolean 语法；线编码恒 1 字节（0x00/0x01）。
       vb = Uint8List(1)..[0] = value ? 1 : 0;
     } else if (value is (int, int, int)) {
-      // RFC 8011 §5.1.14：resolution 语法；cross(int32)+feed(int32)+unit
+      // RFC 8011 §5.1.16：resolution 语法；cross(int32)+feed(int32)+unit
       // 1 字节（3=dpi / 4=dpcm），共 9 字节。
       vb = Uint8List(9);
       final bd = ByteData.sublistView(vb);

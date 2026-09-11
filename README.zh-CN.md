@@ -41,7 +41,7 @@
   - `ippDirect` —— 无 URF 但 `pdl` 含 `image/pwg-raster`；可由本包直连打印。
   - `vendorOnly` —— 仅厂商私有格式；引导用户使用厂商 App。
 - **IPP 1.1 客户端**（RFC 8010 / RFC 8011）：`Print-Job`、`Create-Job` + `Send-Document`（多文档）、`Get-Printer-Attributes`、`Get-Job-Attributes`、`Get-Jobs`、`Cancel-Job`；作业状态轮询带瞬态故障容错。
-- **能力引擎** —— `inspect()` 返回 `PrinterCapabilities`：24 项标准属性（身份、状态与原因、是否收作业、文档格式、介质、色彩、双面、分辨率、份数区间、整饰、IPP 版本、操作集、URI 安全），全部**从打印机确定性自报 lenient 解析**（RFC 8011 §6.2）——属性缺失即不支持，绝不推断。新值语法解码：resolution（§5.1.14）、rangeOfInteger（§5.1.15）、boolean（§5.1.12）。
+- **能力引擎** —— `inspect()` 返回 `PrinterCapabilities`：24 项标准属性（身份、状态与原因、是否收作业、文档格式、介质、色彩、双面、分辨率、份数区间、整饰、IPP 版本、操作集、URI 安全），全部**从打印机确定性自报 lenient 解析**（RFC 8011 §6.2）——属性缺失即不支持，绝不推断。新值语法解码：resolution（§5.1.16）、rangeOfInteger（§5.1.14）、boolean（§5.1.12）。
 - **Validate-Job 预检** —— `validateJob()` 先问打印机「这个 Job 你能不能处理」（操作码 0x0004，不带文档数据），返回结构化 `PrintValidationResult`（含 Unsupported Attributes 组，组 tag 0x05）——大文档只在明确放行后才提交。
 - **Job Engine** —— `submit()` / `monitor()` / `getJob()` / `cancel()` 职责拆分（0.6）：提交后拿到不可变 `PrintJob` 快照（job-state 七态 + `job-state-reasons` 作业级原因），`monitor()` 以状态流轮询至终态，瞬态故障有界吸收；`print()` 进度流保持向后兼容，二者共享 gate→协商→编码单一来源。
 - **手动直连** —— `addEndpoint(Uri)`（0.7）：发现不到 ≠ 不能打印。mDNS 被屏蔽、跨网段、已知地址场景，URI 本身即 IPP endpoint 存在性的用户断言；能力判定仍交实时查询 + 协商器终审（probe 驱动），解析诚实（scheme 白名单 / 标准缺省端口 / 歧义拒绝）。

@@ -53,7 +53,7 @@ class PrinterInfo {
   final String? sidesDefault;
 
   /// 打印机声明支持的分辨率（`printer-resolution-supported`，格式化
-  /// `横x纵单位`，如 `360x360dpi`；RFC 8011 §5.1.14 resolution 语法）。
+  /// `横x纵单位`，如 `360x360dpi`；RFC 8011 §5.1.16 resolution 语法）。
   ///
   /// 供宿主在栅格化前协商 dpi：**下发值应取自该列表**（否则属请求
   /// 打印机做未声明之事，宽容机型接受、严格机型可能拒收或异常渲染）。
@@ -153,7 +153,7 @@ class PrinterCapabilities {
 
   /// `printer-resolution-supported`（格式化 `横x纵单位`，如 `600x600dpi`；
   /// resolution 语法 = cross(int32)+feed(int32)+unit(3=dpi/4=dpcm)，RFC 8011
-  /// §5.1.14）。
+  /// §5.1.16）。
   final List<String> resolutionsSupported;
 
   /// `printer-resolution-default`（同上格式；null = 未声明）。

@@ -209,7 +209,7 @@ class IppCodec {
     if (options.duplex != null) {
       b.attr(tagKeyword, 'sides', options.duplex!);
     }
-    // 分辨率（RFC 8011 §5.1.14 resolution 线语法：cross+feed+unit 9 字节）。
+    // 分辨率（RFC 8011 §5.1.16 resolution 线语法：cross+feed+unit 9 字节）。
     final res = options.resolution;
     if (res != null) {
       b.attr(tagResolution, 'printer-resolution', res);

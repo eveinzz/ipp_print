@@ -57,7 +57,7 @@ class PrintOptions {
   /// 不下发（打印机按 RFC 8011 默认 false 处理，即尽力打印）。
   final PrintFidelity? fidelity;
 
-  /// 打印分辨率（job 属性 `printer-resolution`，RFC 8011 §5.1.14
+  /// 打印分辨率（job 属性 `printer-resolution`，RFC 8011 §5.1.16
   /// resolution 线语法）；null = 不下发。
   ///
   /// record 形态 `(cross, feed, unit)`，unit：3=dpi / 4=dpcm。取值应来自

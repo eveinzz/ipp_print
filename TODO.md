@@ -229,10 +229,12 @@ job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收�
 
 ### 0.8.x+ — 候选增强（封板后，additive-only）
 
-- [ ] `IppValue` 补齐 IPP 值语法：`dateTime`（0x31，RFC 8011 §5.1.13）、
-  `collection`（0x34 begCollection / 0x35 endCollection /
-  0x36 valueCollection / 0x37 memberName，§5.1.16——`media-col-database` /
-  `media-size-supported` 的载体）、text-vs-name（0x41/0x45 vs 0x42/0x46）
+- [ ] `IppValue` 补齐 IPP 值语法：`dateTime`（0x31，RFC 8011 §5.1.15）、
+  `collection`（RFC 8010 §3.1.6–3.1.7：0x34 begCollection / 0x37
+  endCollection / 0x4a memberAttrName，RFC 8011 §5.1.17——
+  `media-col-database` / `media-size-supported` 的载体）、text-vs-name
+  （0x41 textWithoutLanguage vs 0x42 nameWithoutLanguage；WithLanguage
+  变体 0x35/0x36 为 octetString 形态，RFC 8010 Table 5）
   语义区分。准入条件：内核出现真实消费路径（如 media-col 打印），
   无场景牵引不做（0.7.0 封板裁决的遗留项显式迁移）。
 - [ ] `Stream<PrinterDiscoveryEvent>` 流式发现（printerAdded/Updated/Removed；
@@ -248,7 +250,6 @@ job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收�
 - [ ] Android 原生适配决策项：`NsdManager`（走系统服务、免 MulticastLock，
   同 Bonjour 豁免逻辑）替代「宿主自理 MulticastLock」——需新增 android/
   原生模块，属产品决策。
-- [ ] Typed Value collection 深化（`media-col-database` 等，真实机型触发时）。
 
 ---
 

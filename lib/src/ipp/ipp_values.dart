@@ -98,7 +98,7 @@ class IppValue {
     return raw[0] != 0;
   }
 
-  /// rangeOfInteger 值解码（RFC 8011 §5.1.15，两个 int32：低、高）。
+  /// rangeOfInteger 值解码（RFC 8011 §5.1.14，两个 int32：低、高）。
   /// 非 8 字节抛 [IppPrintException]。
   (int, int) get asRange {
     if (raw.length != 8) {
@@ -109,7 +109,7 @@ class IppValue {
     return (bd.getInt32(0, Endian.big), bd.getInt32(4, Endian.big));
   }
 
-  /// resolution 值解码（RFC 8011 §5.1.14，9 字节）。
+  /// resolution 值解码（RFC 8011 §5.1.16，9 字节）。
   /// 非 9 字节或未知单位抛 [IppPrintException]。
   IppResolution get asResolution {
     if (raw.length != 9) {
@@ -129,7 +129,7 @@ class IppValue {
   }
 }
 
-/// resolution 语法解码结果（RFC 8011 §5.1.14）。
+/// resolution 语法解码结果（RFC 8011 §5.1.16）。
 class IppResolution {
   const IppResolution({
     required this.cross,

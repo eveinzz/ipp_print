@@ -95,7 +95,7 @@ Print Core Foundation（契约冻结 v1）：作业语义层成为可长期依�
   （+ `IppResolution`，keyword 形态 `360x360dpi`）——inspect 定制解码上收。
 - `print()` 线格式新增：`ipp-attribute-fidelity`（fidelity=exact 时下发
   true，RFC 8011 §5.2.2）与 `printer-resolution`（resolution 线语法 9 字节，
-  RFC 8011 §5.1.14）；缺省均不下发，既有作业字节零变化。
+  RFC 8011 §5.1.16）；缺省均不下发，既有作业字节零变化。
 
 ### Changed
 
@@ -216,8 +216,8 @@ Print Core Foundation（契约冻结 v1）：作业语义层成为可长期依�
   security) and parses them leniently into the new `PrinterCapabilities`
   model — every field comes from deterministic printer self-reporting
   (RFC 8011 §6.2), missing attributes stay null/empty, nothing is
-  inferred. New value-syntax decoders: resolution (RFC 8011 §5.1.14),
-  rangeOfInteger (§5.1.15), boolean (§5.1.12).
+  inferred. New value-syntax decoders: resolution (RFC 8011 §5.1.16),
+  rangeOfInteger (§5.1.14), boolean (§5.1.12).
 - **Validate-Job preflight (`validateJob()`)**: operation 0x0004
   (RFC 8011 §4.2.3, CUPS ipp.h cross-checked) with the structured
   `PrintValidationResult` — `valid` + the printer's Unsupported
