@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-09-11
+
+Print Core Foundation（契约冻结 v1）：作业语义层成为可长期依赖的契约。
+
+### Added
+
+- **`PrintTicket`**（作业语义模型：media / colorMode / sides / resolution /
+  copies + `PrintFidelity`）；`print()` 以 `ticket:` 参数接收（原 `options:`
+  参数保留于 `printPdf`，经 `PrintTicket.fromOptions` 桥接）。
+- **`CapabilityValidator`**（本地预检，零网络请求）：ticket 值 ∉ 声明能力 →
+  结构化 `PrintValidationResult` + 未支持属性名列表；与 Validate-Job
+  （设备级终审）双层并存；能力缺失字段跳过（缺≠不支持）。
+  Facade 出口：`IppPrint.validateTicket(...)`。
+- **`IppErrorCategory`** 分类轴（ipp / unsupported / job / network / generic）：
+  新增 `IppUnsupportedException`；`IppTransientException` 迁入统一异常体系。
+  网络层平台异常（SocketException 等）保持原样透出，不二次包装。
+- **Typed IPP Value 基础层**：`IppValue.asBool` / `asRange` / `asResolution`
+  （+ `IppResolution`，keyword 形态 `360x360dpi`）——inspect 定制解码上收。
+- `print()` 线格式新增：`ipp-attribute-fidelity`（fidelity=exact 时下发
+  true，RFC 8011 §5.2.2）与 `printer-resolution`（resolution 线语法 9 字节，
+  RFC 8011 §5.1.14）；缺省均不下发，既有作业字节零变化。
+
+### Changed
+
+- **Capability Gate 事实化重构**：`print()` 仅拒绝 TXT `unknown`（无 IPP
+  证据）；airPrint / ippDirect / vendorOnly 均放行至实时能力查询 + 协商器
+  终审——**仅声明 IPP+PDF 的设备不再被整包拒绝**（PDF 直投经协商器天然
+  可达）。`probe()` 的 vendorOnly 同样改为实时 IPP 交叉验证（不再凭 TXT
+  盲判 unsupported）；airPrint 保持免查询快路径。
+
+### Internal
+
+- `ipp_message.dart` 拆分 `_Builder` 至 `ipp_message_builder.dart`（≤400 行
+  纪律，预留 0.6 Job Engine 增量空间）。
+
 ## [0.4.1] — 2026-09-11
 
 ### Fixed

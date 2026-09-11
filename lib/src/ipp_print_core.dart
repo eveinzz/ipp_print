@@ -3,6 +3,7 @@ import 'dart:io' show SocketException;
 import 'dart:typed_data';
 
 import 'capability/capability.dart';
+import 'capability/capability_validator.dart';
 import 'discovery/native_bonjour_discovery.dart' show defaultPlatformDiscovery;
 import 'document/document_format_negotiator.dart';
 import 'document/print_document.dart';
@@ -38,11 +39,14 @@ class IppPrint {
 
   /// 探测单台打印机：TXT 分类 + IPP 查询交叉验证，映射为状态机。
   ///
-  /// 交叉验证规则（双源确定性）：TXT 判为 ippDirect 但 IPP 声明的
-  /// document-format-supported 不含 image/pwg-raster → 降级 unsupported。
+  /// 交叉验证规则（双源确定性，0.5 起事实驱动）：TXT 判 ippDirect /
+  /// vendorOnly 均发起实时 IPP 查询，以 `document-format-supported` 是否
+  /// 含 image/pwg-raster 定 ready——vendorOnly 不再凭 TXT 盲判 unsupported
+  /// （TXT pdl 可能过时/截断，声明集权威 = 打印机当下自报）。
   /// **缺失（空集）同样降级**——「没有声明能力」≠「支持能力」
   /// （document-format-supported 是 RFC 8011 REQUIRED 打印机描述属性，
   /// 声明集为空即非 conformant 打印机，按未声明处理绝不推断）。
+  /// airPrint 级保持免查询快路径（宿主应交还系统打印面板）。
   Future<PrinterProbeStatus> probe(
     DiscoveredPrinter printer, {
     void Function(PrinterInfo info)? onInfo,
@@ -51,11 +55,9 @@ class IppPrint {
     if (txtCapability == PrinterCapability.unknown) {
       return PrinterProbeStatus.unsupported;
     }
-    if (txtCapability != PrinterCapability.ippDirect) {
+    if (txtCapability == PrinterCapability.airPrint) {
       onInfo?.call(PrinterInfo(capability: txtCapability));
-      return txtCapability == PrinterCapability.airPrint
-          ? PrinterProbeStatus.ready
-          : PrinterProbeStatus.unsupported;
+      return PrinterProbeStatus.ready;
     }
     try {
       ippProbeLog('probe ${printer.name} -> ${printer.httpUriString}');
@@ -147,7 +149,13 @@ class IppPrint {
   }
 
   /// 通用文档打印（0.4 Document Pipeline 核心入口）：协商 → 直投 /
-  /// PWG 栅格回退 → 提交 → 等待终态。仅接受 ippDirect 级打印机。
+  /// PWG 栅格回退 → 提交 → 等待终态。
+  ///
+  /// 0.5 起 Gate 事实化：TXT 分类仅否定 `unknown`（无 IPP 证据），
+  /// 其余分类交由实时能力查询 + 协商器终审（详见方法内注释）。
+  ///
+  /// [ticket] 为作业语义模型（0.5 契约对象；null 字段 = 打印机默认），
+  /// 内部经 [PrintTicket.toOptions] 转传输层下发。
   ///
   /// 路由决策由 [DocumentFormatNegotiator] 依打印机**此刻实时自报**的
   /// `document-format-supported` 作出（不使用宿主缓存的 probe 结果——
@@ -167,14 +175,23 @@ class IppPrint {
     required PrintDocument document,
     required DiscoveredPrinter printer,
     PdfRasterizer? rasterizer,
-    PrintOptions options = const PrintOptions(),
+    PrintTicket ticket = const PrintTicket(),
     Duration jobTimeout = const Duration(minutes: 5),
     int? dpi,
   }) async* {
-    if (CapabilityClassifier.classify(printer.txt) !=
-        PrinterCapability.ippDirect) {
-      throw const IppPrintException(
-          'printer is not IPP-direct capable (see probe())');
+    final options = ticket.toOptions();
+    // Gate 事实化（0.5 重构）：TXT 分类不再是「本包可达」的终审——
+    // airPrint / ippDirect / vendorOnly 三类均有 IPP endpoint 证据
+    // （rp 由发现层保证非空），真正的把关交给下面的**实时能力查询 +
+    // 协商器**（声明集无交集 → IppUnsupportedException）。TXT 只保留
+    // 一个否定门：unknown = 广播缺可判定字段（无 rp/pdl/urf 证据），
+    // 连 IPP endpoint 存在性都无法确认，拒绝且不发任何请求。
+    // 修复（TODO 0.4 遗留）：仅声明 IPP+PDF 的设备（原 vendorOnly）
+    // 不再被整包拒绝——PDF 直投经协商器天然可达。
+    if (CapabilityClassifier.classify(printer.txt) ==
+        PrinterCapability.unknown) {
+      throw const IppUnsupportedException(
+          'TXT record shows no IPP evidence (no rp/pdl/urf) — see probe()');
     }
     // 声明集实时查询（协商数据源）。整机限时 10s，超时如实抛出。
     final PrinterAttributes attrs;
@@ -298,11 +315,23 @@ class IppPrint {
       document: PrintDocument(bytes: pdfBytes, mimeType: 'application/pdf'),
       printer: printer,
       rasterizer: rasterizer,
-      options: options,
+      ticket: PrintTicket.fromOptions(options),
       jobTimeout: jobTimeout,
       dpi: dpi,
     );
   }
+
+  /// 作业票据本地预检（0.5 CapabilityValidator 的 Facade 出口）：
+  /// ticket 值 ∉ 打印机声明能力 → 结构化 invalid + 未支持属性名列表，
+  /// 纯本地判定不产生网络请求。与 [validateJob]（设备级终审）双层并存：
+  /// 本地预检拦「声明集就没有的值」，Validate-Job 问「这台机器此刻收不收」。
+  /// 能力缺失（空声明集）的字段跳过检查——缺≠不支持，绝不推断。
+  PrintValidationResult validateTicket({
+    required PrintTicket ticket,
+    required PrinterCapabilities capabilities,
+  }) =>
+      CapabilityValidator.validate(
+          ticket: ticket, capabilities: capabilities);
 
   /// 取消指定作业（透传 [IppClient.cancelJob]）。
   Future<void> cancelJob(DiscoveredPrinter printer, int jobId) =>

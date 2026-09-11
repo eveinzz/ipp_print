@@ -51,11 +51,6 @@ class IppJobSummary {
   final String? userName;
 }
 
-/// HTTP 传输层瞬态故障（5xx）：可由轮询逻辑重试吸收。
-class IppTransientException extends IppPrintException {
-  const IppTransientException(super.message);
-}
-
 /// IPP 传输客户端：POST application/ipp 到打印机 631 端口
 /// （明文 ipp:// 或 TLS ipps:// 通道，由 [DiscoveredPrinter.secure] 决定）。
 class IppClient {

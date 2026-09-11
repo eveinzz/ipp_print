@@ -87,4 +87,72 @@ class IppValue {
     }
     return ByteData.sublistView(raw).getInt32(0, Endian.big);
   }
+
+  /// boolean 值解码（RFC 8011 §5.1.12，线编码恒 1 字节；0.5 上收自
+  /// inspect 定制解码）。非 1 字节抛 [IppPrintException]。
+  bool get asBool {
+    if (raw.length != 1) {
+      throw IppPrintException(
+          'boolean value must be 1 byte, got ${raw.length}');
+    }
+    return raw[0] != 0;
+  }
+
+  /// rangeOfInteger 值解码（RFC 8011 §5.1.15，两个 int32：低、高）。
+  /// 非 8 字节抛 [IppPrintException]。
+  (int, int) get asRange {
+    if (raw.length != 8) {
+      throw IppPrintException(
+          'rangeOfInteger value must be 8 bytes, got ${raw.length}');
+    }
+    final bd = ByteData.sublistView(raw);
+    return (bd.getInt32(0, Endian.big), bd.getInt32(4, Endian.big));
+  }
+
+  /// resolution 值解码（RFC 8011 §5.1.14，9 字节）。
+  /// 非 9 字节或未知单位抛 [IppPrintException]。
+  IppResolution get asResolution {
+    if (raw.length != 9) {
+      throw IppPrintException(
+          'resolution value must be 9 bytes, got ${raw.length}');
+    }
+    final bd = ByteData.sublistView(raw);
+    final unit = raw[8];
+    if (unit != IppResolution.dpi && unit != IppResolution.dpcm) {
+      throw IppPrintException('unknown resolution unit $unit');
+    }
+    return IppResolution(
+      cross: bd.getInt32(0, Endian.big),
+      feed: bd.getInt32(4, Endian.big),
+      unit: unit,
+    );
+  }
+}
+
+/// resolution 语法解码结果（RFC 8011 §5.1.14）。
+class IppResolution {
+  const IppResolution({
+    required this.cross,
+    required this.feed,
+    required this.unit,
+  });
+
+  static const int dpi = 3;
+  static const int dpcm = 4;
+
+  /// 横向分辨率（cross feed direction）。
+  final int cross;
+
+  /// 纵向分辨率（main feed direction）。
+  final int feed;
+
+  /// 单位（3=dpi / 4=dpcm，原始 enum 值）。
+  final int unit;
+
+  bool get isDpi => unit == dpi;
+  bool get isDpcm => unit == dpcm;
+
+  /// PWG keyword 形态（`360x360dpi`），与 `printer-resolution-supported`
+  /// 的既有字符串表示一致。
+  String get asKeyword => '${cross}x$feed${isDpi ? 'dpi' : 'dpcm'}';
 }

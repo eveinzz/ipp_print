@@ -119,7 +119,7 @@ final validation = await ipp.validateJob(
 );
 if (!validation.valid) { /* surface validation.statusCode to the host */ }
 
-// 3. Print via IPP direct connection (ippDirect only).
+// 3. Print via IPP direct connection.
 if (status == PrinterProbeStatus.ready) {
   // 3a. General entry (0.4 Document Pipeline): the kernel queries the
   // printer's document-format-supported live and routes — declared MIME
@@ -127,10 +127,13 @@ if (status == PrinterProbeStatus.ready) {
   // image/pwg-raster → raster fallback (PDF source + PdfRasterizer);
   // else throws. PDF direct-print works opportunistically on printers
   // that declare application/pdf (SHOULD per IPP Everywhere §6).
+  // 0.5: the TXT gate only rejects `unknown` (no IPP evidence) — printers
+  // declaring IPP+PDF are no longer rejected wholesale.
   await for (final progress in ipp.print(
     document: PrintDocument(bytes: pdfBytes, mimeType: 'application/pdf'),
     printer: printer,
     rasterizer: myPdfRasterizer, // required for the raster fallback
+    ticket: const PrintTicket(copies: 2), // 0.5 semantic job model
   )) {
     print('${progress.stage}${progress.page != null ? ' p${progress.page}' : ''}');
   }
@@ -144,11 +147,22 @@ if (status == PrinterProbeStatus.ready) {
     print('${progress.stage}${progress.page != null ? ' p${progress.page}' : ''}');
   }
 }
+
+// 0.5: local ticket pre-check (no network) — pair with Validate-Job
+// (device-level) for two-layer validation.
+final check = ipp.validateTicket(
+  ticket: const PrintTicket(media: 'iso_a4_210x297mm', copies: 2),
+  capabilities: caps,
+);
+if (!check.valid) {
+  print(check.unsupportedAttributes); // e.g. ['media']
+}
 ```
 
 ### Job options
 
-`printPdf` accepts a `PrintOptions`:
+`print()` takes a `PrintTicket` (0.5 semantic model); `printPdf` accepts the
+transport-level `PrintOptions` (bridged via `PrintTicket.fromOptions`):
 
 **Unified semantics: `null` = attribute omitted**, so the printer applies its
 own `*-default` (RFC 8011 §5.2 job-template default semantics). Pass `null`
@@ -159,8 +173,10 @@ guess one.
 |---|---|---|---|
 | `copies` | `1` | `copies` | integer (always sent; there is no "printer default" for copies) |
 | `media` | `null` | `media` | PWG name; should come from the printer's `media-supported` (`null` = omitted → `media-default`) |
-| `duplex` | `null` | `sides` | `one-sided` / `two-sided-long-edge` / `two-sided-short-edge`; should be a member of `sides-supported` (`null` = omitted → `sides-default`) |
+| `sides` (ticket) / `duplex` (options) | `null` | `sides` | `one-sided` / `two-sided-long-edge` / `two-sided-short-edge`; should be a member of `sides-supported` (`null` = omitted → `sides-default`) |
 | `colorMode` | `null` | `print-color-mode` | `null` = attribute omitted → the printer applies its own `print-color-mode-default` per RFC 8011 (typically `auto`). Explicit values (`color` / `monochrome`, …) are sent as-is and should be a member of the printer's `print-color-mode-supported` (full value set: PWG 5107.3 §6.2.27). |
+| `resolution` | `null` | `printer-resolution` | 0.5: PWG keyword form (`360x360dpi`); should come from `printer-resolution-supported` |
+| `fidelity` | `null` | `ipp-attribute-fidelity` | 0.5: `exact` sends `true` (printer MUST reject unsupported values); `null`/`bestEffort` = omitted → best-effort per RFC 8011 default |
 
 ### Capability negotiation (host UI data source)
 

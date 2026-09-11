@@ -159,57 +159,29 @@ String? _stringOf(IppGroup? g, String name) {
   return values.first.asString;
 }
 
-/// boolean 语法（RFC 8011 §5.1.12）：线编码恒 1 字节。
+/// boolean 语法：上收为 [IppValue.asBool]（0.5 Typed Value 层）。
 bool? _boolOf(IppGroup? g, String name) {
   final values = g?.attributes[name];
   if (values == null || values.isEmpty) return null;
-  final raw = values.first.raw;
-  if (raw.length != 1) {
-    throw IppPrintException(
-        'boolean value must be 1 byte, got ${raw.length}');
-  }
-  return raw[0] != 0;
+  return values.first.asBool;
 }
 
-/// rangeOfInteger 语法（RFC 8011 §5.1.15）：两个 int32（低、高）。
+/// rangeOfInteger 语法：上收为 [IppValue.asRange]（0.5 Typed Value 层）。
 (int, int)? _rangeOf(IppGroup? g, String name) {
   final values = g?.attributes[name];
   if (values == null || values.isEmpty) return null;
-  final raw = values.first.raw;
-  if (raw.length != 8) {
-    throw IppPrintException(
-        'rangeOfInteger value must be 8 bytes, got ${raw.length}');
-  }
-  final bd = ByteData.sublistView(raw);
-  return (bd.getInt32(0, Endian.big), bd.getInt32(4, Endian.big));
+  return values.first.asRange;
 }
 
-/// resolution 语法（RFC 8011 §5.1.14）：cross(int32)+feed(int32)+unit
-/// （3=dpi，4=dpcm），单值 9 字节。
-String _resolutionTextOf(IppValue v) {
-  if (v.raw.length != 9) {
-    throw IppPrintException(
-        'resolution value must be 9 bytes, got ${v.raw.length}');
-  }
-  final bd = ByteData.sublistView(v.raw);
-  final cross = bd.getInt32(0, Endian.big);
-  final feed = bd.getInt32(4, Endian.big);
-  final unit = v.raw[8];
-  final suffix = switch (unit) {
-    3 => 'dpi',
-    4 => 'dpcm',
-    _ => throw IppPrintException('unknown resolution unit $unit'),
-  };
-  return '${cross}x$feed$suffix';
-}
-
+/// resolution 语法：上收为 [IppValue.asResolution]（0.5 Typed Value 层），
+/// 输出 PWG keyword 形态字符串（`360x360dpi`）。
 List<String> _resolutions(IppGroup? g, String name) => [
       for (final v in g?.attributes[name] ?? const <IppValue>[])
-        _resolutionTextOf(v),
+        v.asResolution.asKeyword,
     ];
 
 String? _resolutionText(IppGroup? g, String name) {
   final values = g?.attributes[name];
   if (values == null || values.isEmpty) return null;
-  return _resolutionTextOf(values.first);
+  return values.first.asResolution.asKeyword;
 }

@@ -53,7 +53,7 @@ class DocumentFormatNegotiator {
         return DocumentDecision(passthrough: false, documentFormat: f);
       }
     }
-    throw IppPrintException(
+    throw IppUnsupportedException(
       'no viable document route: printer declares '
       '$printerFormats, document is ${document.mimeType}',
     );

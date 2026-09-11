@@ -6,4 +6,5 @@ library;
 export 'models/capabilities.dart';
 export 'models/exceptions.dart';
 export 'models/print_options.dart';
+export 'models/print_ticket.dart';
 export 'models/printer_identity.dart';

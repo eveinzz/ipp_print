@@ -119,17 +119,20 @@ final validation = await ipp.validateJob(
 );
 if (!validation.valid) { /* 把 validation.statusCode 呈现给宿主 */ }
 
-// 3. 通过 IPP 直连打印（仅 ippDirect）。
+// 3. 通过 IPP 直连打印。
 if (status == PrinterProbeStatus.ready) {
   // 3a. 通用入口（0.4 Document Pipeline）：内核实时查询打印机的
   // document-format-supported 并路由——声明该 MIME → 直投（字节原样提交，
   // 保矢量与文本层）；否则含 image/pwg-raster → 栅格回退（仅限 PDF 源 +
   // 注入 PdfRasterizer）；否则抛异常。声明 application/pdf 的机型
   // （IPP Everywhere §6：PDF 仅 SHOULD）可机会主义直投 PDF。
+  // 0.5：TXT 门仅拒绝 unknown（无 IPP 证据）——仅声明 IPP+PDF 的机型
+  // 不再被整包拒绝。
   await for (final progress in ipp.print(
     document: PrintDocument(bytes: pdfBytes, mimeType: 'application/pdf'),
     printer: printer,
     rasterizer: myPdfRasterizer, // 栅格回退必需
+    ticket: const PrintTicket(copies: 2), // 0.5 作业语义模型
   )) {
     print('${progress.stage}${progress.page != null ? ' p${progress.page}' : ''}');
   }
@@ -143,11 +146,22 @@ if (status == PrinterProbeStatus.ready) {
     print('${progress.stage}${progress.page != null ? ' p${progress.page}' : ''}');
   }
 }
+
+// 0.5：票据本地预检（零网络请求）——与 Validate-Job（设备级终审）
+// 构成双层校验。
+final check = ipp.validateTicket(
+  ticket: const PrintTicket(media: 'iso_a4_210x297mm', copies: 2),
+  capabilities: caps,
+);
+if (!check.valid) {
+  print(check.unsupportedAttributes); // 如 ['media']
+}
 ```
 
 ### 作业选项
 
-`printPdf` 可传 `PrintOptions`：
+`print()` 接收 `PrintTicket`（0.5 语义模型）；`printPdf` 接收传输层
+`PrintOptions`（经 `PrintTicket.fromOptions` 桥接）：
 
 **统一语义：`null` = 不下发该属性**，由打印机应用自身 `*-default`
 （RFC 8011 §5.2 job template 默认值语义）。宿主无法从打印机声明能力中
@@ -157,8 +171,10 @@ if (status == PrinterProbeStatus.ready) {
 |---|---|---|---|
 | `copies` | `1` | `copies` | 份数（恒下发；份数无「打印机默认」语义） |
 | `media` | `null` | `media` | PWG 介质名；应取自打印机 `media-supported`（`null` = 不下发，用 `media-default`） |
-| `duplex` | `null` | `sides` | `one-sided` / `two-sided-long-edge` / `two-sided-short-edge`；取值应为 `sides-supported` 的成员（`null` = 不下发，用 `sides-default`） |
+| `sides`（ticket）/ `duplex`（options） | `null` | `sides` | `one-sided` / `two-sided-long-edge` / `two-sided-short-edge`；取值应为 `sides-supported` 的成员（`null` = 不下发，用 `sides-default`） |
 | `colorMode` | `null` | `print-color-mode` | `null` = 不下发 → 打印机用 `print-color-mode-default`（典型为 `auto`）。显式指定（`color` / `monochrome` 等）则原样下发，取值应为打印机 `print-color-mode-supported` 的成员（全集见 PWG 5107.3 §6.2.27）。 |
+| `resolution` | `null` | `printer-resolution` | 0.5 新增：PWG keyword 形态（`360x360dpi`）；应取自 `printer-resolution-supported` 协商结果 |
+| `fidelity` | `null` | `ipp-attribute-fidelity` | 0.5 新增：`exact` 下发 `true`（打印机对不支持值必须拒绝整个作业）；`null`/`bestEffort` = 不下发 → 按 RFC 8011 默认尽力打印 |
 
 ### 能力协商（宿主 UI 数据源）
 

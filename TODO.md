@@ -153,22 +153,27 @@ job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收�
   不支持值）；PrintTicket 应含 fidelity/strictness 维度
   （L3250 jobCreationAttrs 确声明 ipp-attribute-fidelity 可提交）。
 
-### 0.5.0 — Print Core Foundation（契约冻结 v1）
+### 0.5.0 — Print Core Foundation（契约冻结 v1，已交付 2026-09-11）
 
 核心目标：**定义上层可长期依赖的打印语义层。**（0.4.1 归档的 Gate 冲突在本版解决）
 
-- [ ] Capability Gate 重构：`enum PrinterCapability` 分类门 → 事实驱动能力集
-  （IPP Endpoint 实测能力优先，TXT 分类降为兼容层）——仅声明 IPP+PDF
-  的设备不再被整包拒绝。
-- [ ] `PrintTicket` 显式建模（media/colorMode/sides/resolution/copies +
-  fidelity 维度，见 0.4.1 注记）；`PrintOptions` 保留为便利/兼容层。
-- [ ] `CapabilityValidator` 本地预检：ticket 值 ∉ capabilities → 结构化
-  `PrintValidationResult`，与 Validate-Job（设备级终审）双层并存。
-- [ ] `DocumentRoute` 类型化：协商器决策（直投/栅格回退/拒绝）显式化为契约出参。
-- [ ] Structured Error 分类轴：现有 3 类异常（IppPrint/IppStatus/IppJobTimeout）
-  上扩 network/validation/unsupported 维度——复用不推翻。
-- [ ] Typed IPP Value 基础层：integer/boolean/keyword/name/text/uri/
-  resolution/rangeOfInteger 上收为类型层（inspect 定制解码迁入）。
+- [x] Capability Gate 重构：`print()` 仅拒绝 TXT `unknown`（无 IPP 证据），
+  其余分类放行至实时能力查询 + 协商器终审——仅声明 IPP+PDF 的设备不再
+  被整包拒绝；`probe()` vendorOnly 同改实时交叉验证（airPrint 保持快路径）。
+- [x] `PrintTicket` 显式建模（media/colorMode/sides/resolution/copies +
+  fidelity 维度，见 0.4.1 注记）；`PrintOptions` 保留为便利/兼容层
+  （`PrintTicket.fromOptions` 桥接），fidelity / printer-resolution 线格式
+  同步补齐（缺省不下发，既有作业字节零变化）。
+- [x] `CapabilityValidator` 本地预检：ticket 值 ∉ capabilities → 结构化
+  `PrintValidationResult`，与 Validate-Job（设备级终审）双层并存；
+  Facade 出口 `IppPrint.validateTicket`。
+- [x] `DocumentRoute` 契约化确认：0.4 的 `DocumentDecision`
+  （passthrough/documentFormat）即类型化路由出参，随本版冻结为契约对象。
+- [x] Structured Error 分类轴：`IppErrorCategory`（ipp/unsupported/job/
+  network/generic）+ `IppUnsupportedException`；网络层平台异常原样透出
+  不二次包装。
+- [x] Typed IPP Value 基础层：boolean/rangeOfInteger/resolution 上收为
+  `IppValue.asBool/asRange/asResolution`（+ `IppResolution`）。
 - P1（不阻塞冻结）：dateTime(0x31)/collection(0x34) 解码——等真实机型
   media-col 需求触发（L3250 级 keyword 介质表已够）。
 

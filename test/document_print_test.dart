@@ -247,7 +247,8 @@ void main() {
       expect(client.operations, [IppCodec.opGetPrinterAttributes]);
     });
 
-    test('非直连机型直接拒绝（同 printPdf 门，不发任何请求）', () async {
+    test('TXT 无 IPP 证据（unknown）→ 拒绝，不发任何请求（0.5 Gate 事实化）',
+        () async {
       final client = FakeIppClient({});
       final ipp = IppPrint(discovery: _FakeDiscovery(), client: client);
       await expectLater(
@@ -255,15 +256,40 @@ void main() {
             .print(
               document: PrintDocument(
                   bytes: const [1], mimeType: 'application/pdf'),
-              printer: _printer(
-                  {'pdl': 'application/vnd.epson.escpr', 'rp': 'ipp/print'}),
+              printer: _printer({'ty': 'Some Printer'}),
               rasterizer: StaticRasterizer(RasterPage(
                   width: 1, height: 1, bytes: Uint8List.fromList([0, 0, 0]))),
             )
             .drain<void>(),
-        throwsA(isA<IppPrintException>()),
+        throwsA(isA<IppUnsupportedException>()),
       );
       expect(client.operations, isEmpty);
+    });
+
+    test('vendorOnly（仅声明 escpr）+ 打印机声明 PDF → PDF 直投放行'
+        '（0.5 Gate 事实化：IPP+PDF 设备不再整包拒绝）', () async {
+      final client = FakeIppClient({
+        IppCodec.opGetPrinterAttributes: _printerPdf,
+        IppCodec.opPrintJob: _jobDone,
+        IppCodec.opGetJobAttributes: _jobDone,
+      });
+      final ipp = IppPrint(discovery: _FakeDiscovery(), client: client);
+      final events = <PrintProgress>[];
+      await for (final p in ipp.print(
+        document: PrintDocument(
+            bytes: const [0x25, 0x50, 0x44, 0x46],
+            mimeType: 'application/pdf'),
+        printer: _printer(
+            {'pdl': 'application/vnd.epson.escpr', 'rp': 'ipp/print'}),
+        jobTimeout: const Duration(seconds: 2),
+      )) {
+        events.add(p);
+      }
+      expect(events.map((e) => e.stage).toList(),
+          [PrintStage.sending, PrintStage.waitingPrinter, PrintStage.done]);
+      final jobBody = client.bodies
+          .singleWhere((b) => (b[2] << 8 | b[3]) == IppCodec.opPrintJob);
+      expect(String.fromCharCodes(jobBody), contains('application/pdf'));
     });
   });
 }

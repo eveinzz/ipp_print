@@ -185,20 +185,20 @@ void main() {
     expect(rasterizer.callCount, 1);
   });
 
-  test('printPdf：非直连机型直接拒绝（不会误投厂商私有格式）', () async {
+  test('printPdf：TXT 无 IPP 证据 → 拒绝（不发任何请求；0.5 Gate 事实化）',
+      () async {
     final client = FakeIppClient({});
     final ipp = IppPrint(discovery: _FakeDiscovery(), client: client);
     await expectLater(
       ipp
           .printPdf(
             pdfBytes: const [1],
-            printer: _printer({'pdl': 'application/vnd.epson.escpr',
-              'rp': 'ipp/print'}),
+            printer: _printer({'ty': 'Some Printer'}),
             rasterizer: StaticRasterizer(RasterPage(
                 width: 1, height: 1, bytes: Uint8List.fromList([0, 0, 0]))),
           )
           .drain<void>(),
-      throwsA(isA<IppPrintException>()),
+      throwsA(isA<IppUnsupportedException>()),
     );
     expect(client.operations, isEmpty);
   });

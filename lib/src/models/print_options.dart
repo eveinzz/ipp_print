@@ -3,6 +3,14 @@ library;
 
 import 'dart:typed_data';
 
+/// 属性保真语义（RFC 8011 §5.2.2 `ipp-attribute-fidelity`，0.5 契约字段）。
+///
+/// - [bestEffort]（默认）：不发送 `ipp-attribute-fidelity`——打印机对
+///   不支持的 job template 值可忽略/替换（`valid=true` ≠ 完全保真）；
+/// - [exact]：发送 `ipp-attribute-fidelity=true`——任一提交值不被支持，
+///   打印机必须拒绝整个作业而非降级打印。
+enum PrintFidelity { bestEffort, exact }
+
 /// 打印选项（只收录 IPP 标准属性，字段随所选打印机协商结果生成）。
 ///
 /// **统一语义：null = 不下发该属性**，由打印机应用自身默认值
@@ -15,6 +23,8 @@ class PrintOptions {
     this.media,
     this.colorMode,
     this.duplex,
+    this.fidelity,
+    this.resolution,
   });
 
   /// 打印份数（job 属性 `copies`，integer）。
@@ -42,6 +52,18 @@ class PrintOptions {
   /// null = 不下发，打印机使用自己的 `sides-default`；显式指定时取值
   /// 须为 `sides-supported` 的成员。
   final String? duplex;
+
+  /// 属性保真语义（job 属性 `ipp-attribute-fidelity`）；null（默认）=
+  /// 不下发（打印机按 RFC 8011 默认 false 处理，即尽力打印）。
+  final PrintFidelity? fidelity;
+
+  /// 打印分辨率（job 属性 `printer-resolution`，RFC 8011 §5.1.14
+  /// resolution 线语法）；null = 不下发。
+  ///
+  /// record 形态 `(cross, feed, unit)`，unit：3=dpi / 4=dpcm。取值应来自
+  /// `printer-resolution-supported` 协商结果（0.3.1）；构造便利入口见
+  /// [PrintTicket]（keyword 形态 `360x360dpi`）。
+  final (int, int, int)? resolution;
 }
 
 /// 一页栅格位图（24 位 sRGB，逐行无填充 RGBRGB...）。
