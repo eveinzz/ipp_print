@@ -1,6 +1,9 @@
 import 'dart:typed_data';
 
 import '../models.dart';
+import 'ipp_values.dart';
+
+export 'ipp_values.dart';
 
 /// IPP 1.1（RFC 8011/RFC 8010）报文编解码。
 ///
@@ -33,13 +36,18 @@ class IppCodec {
 
   // operations（IANA IPP Operations 注册表；枚举值由 RFC 8011 §5.4.15
   // operations-supported 定义，与 CUPS cups/ipp.h 逐值对照核实：
-  // Print-Job 0x0002 起、Cancel-Job 0x0008、Get-Job-Attributes 0x0009、
-  // Get-Jobs 0x000A、Get-Printer-Attributes 0x000B）。
+  // Print-Job 0x0002 起、Validate-Job 0x0004、Cancel-Job 0x0008、
+  // Get-Job-Attributes 0x0009、Get-Jobs 0x000A、Get-Printer-Attributes 0x000B）。
   static const int opPrintJob = 0x0002;
+  static const int opValidateJob = 0x0004;
   static const int opCancelJob = 0x0008;
   static const int opGetJobAttributes = 0x0009;
   static const int opGetJobs = 0x000A;
   static const int opGetPrinterAttributes = 0x000B;
+
+  /// Validate-Job 响应的 Unsupported Attributes 组（RFC 8010 delimiter
+  /// tag 0x05；RFC 8011 §4.2.3：打印机按 Print-Job 同款返回组 2）。
+  static const int tagUnsupportedGroup = 0x05;
 
   /// 生成 Print-Job 请求头（文档数据由调用方直接追加在尾部）。
   static Uint8List buildPrintJob({
@@ -59,36 +67,125 @@ class IppCodec {
     b
       ..attr(tagName, 'job-name', jobName)
       ..attr(tagMime, 'document-format', documentFormat);
-    b.group(tagJobGroup)
-      ..attr(tagInteger, 'copies', options.copies)
-      ..attr(tagKeyword, 'media', options.media);
-    // print-color-mode：仅在客户端显式指定时下发；null = 不下发，
-    // 打印机使用自己的 print-color-mode-default（RFC 8011 §5.2 job
-    // template 默认值语义）。
+    b.group(tagJobGroup).attr(tagInteger, 'copies', options.copies);
+    // media / print-color-mode / sides 统一语义：null = 不下发该属性，
+    // 打印机使用自己的 *-default（RFC 8011 §5.2 job template 默认值语义）。
+    // 宿主无法从打印机声明能力确定取值时应传 null，而不是猜一个值。
+    if (options.media != null) {
+      b.attr(tagKeyword, 'media', options.media!);
+    }
     if (options.colorMode != null) {
       b.attr(tagKeyword, 'print-color-mode', options.colorMode!);
     }
-    b.attr(tagKeyword, 'sides', options.duplex);
+    if (options.duplex != null) {
+      b.attr(tagKeyword, 'sides', options.duplex!);
+    }
     return b.take();
   }
 
+  /// Get-Printer-Attributes 请求。
+  ///
+  /// 默认请求集覆盖「宿主 UI 数据源」所必需的能力声明：
+  /// - 介质与格式：判定可否直连、可选纸张；
+  /// - 色彩/双面（`print-color-mode-supported|default`、`sides-supported|default`）：
+  ///   宿主 UI 据此**只展示打印机声明支持的取值**——能力只来自 IPP
+  ///   确定性字段，禁止推断（PWG 5107.3 §6.2.27 / PWG 5100.13）。
+  ///
+  /// [requestedAttributes] 传 null（默认）用内置集；能力引擎
+  /// （inspect）传 [IppCodec.fullCapabilityAttributeSet] 获取完整能力集。
   static Uint8List buildGetPrinterAttributes({
     required String printerUri,
     required int requestId,
-    List<String> requestedAttributes = const [
-      'media-supported',
-      'document-format-supported',
-      'printer-state',
-      'printer-make-and-model',
-    ],
+    List<String>? requestedAttributes,
   }) {
     final b = _Builder(opGetPrinterAttributes, requestId)
       ..attr(tagCharset, 'attributes-charset', 'utf-8')
       ..attr(tagLanguage, 'attributes-natural-language', 'en')
       ..attr(tagUri, 'printer-uri', printerUri.toString())
       ..attr(tagName, 'requesting-user-name', 'ipp_print');
-    for (final name in requestedAttributes) {
+    for (final name in requestedAttributes ?? defaultCapabilityAttributeSet) {
       b.attrOrValue(tagKeyword, 'requested-attributes', name);
+    }
+    return b.take();
+  }
+
+  /// probe() 兼容集（0.2 起的 8 属性，真机验证路径不变）。
+  static const List<String> defaultCapabilityAttributeSet = [
+    'media-supported',
+    'document-format-supported',
+    'printer-state',
+    'printer-make-and-model',
+    'print-color-mode-supported',
+    'print-color-mode-default',
+    'sides-supported',
+    'sides-default',
+  ];
+
+  /// 能力引擎完整集（0.3 inspect()；全部为 RFC 8011 §5.4 定义的
+  /// Printer Description / Status / Template 属性，缺一不致错——
+  /// 解析侧 lenient，打印机截断响应也不崩溃）。
+  static const List<String> fullCapabilityAttributeSet = [
+    // 身份
+    'printer-uri-supported',
+    'printer-name',
+    'printer-info',
+    'printer-make-and-model',
+    // 状态
+    'printer-state',
+    'printer-state-reasons',
+    'printer-is-accepting-jobs',
+    // 文档格式
+    'document-format-supported',
+    'document-format-default',
+    // 介质
+    'media-supported',
+    'media-ready',
+    // 色彩 / 双面
+    'print-color-mode-supported',
+    'print-color-mode-default',
+    'sides-supported',
+    'sides-default',
+    // 分辨率 / 份数 / 整饰
+    'printer-resolution-supported',
+    'printer-resolution-default',
+    'copies-supported',
+    'finishings-supported',
+    // 协议面
+    'ipp-versions-supported',
+    'operations-supported',
+    'job-creation-attributes-supported',
+    'uri-authentication-supported',
+    'uri-security-supported',
+  ];
+
+  /// Validate-Job（RFC 8011 §4.2.3）：与 Print-Job 同构但**无文档数据**、
+  /// 打印机不建作业，用于在提交大文档前验证「同构的 Job Creation 请求
+  /// 会不会被接受」。响应：状态码 + 组 2 = Unsupported Attributes。
+  static Uint8List buildValidateJob({
+    required String printerUri,
+    required String documentFormat,
+    required int requestId,
+    String userName = 'ipp_print',
+    String jobName = 'ipp_print-document',
+    PrintOptions options = const PrintOptions(),
+  }) {
+    final b = _Builder(opValidateJob, requestId)
+      ..attr(tagCharset, 'attributes-charset', 'utf-8')
+      ..attr(tagLanguage, 'attributes-natural-language', 'en')
+      ..attr(tagUri, 'printer-uri', printerUri.toString())
+      ..attr(tagName, 'requesting-user-name', userName)
+      ..attr(tagName, 'job-name', jobName)
+      ..attr(tagMime, 'document-format', documentFormat);
+    b.group(tagJobGroup).attr(tagInteger, 'copies', options.copies);
+    // 与 Print-Job 相同的 null = 不下发语义（RFC 8011 §5.2 默认值语义）。
+    if (options.media != null) {
+      b.attr(tagKeyword, 'media', options.media!);
+    }
+    if (options.colorMode != null) {
+      b.attr(tagKeyword, 'print-color-mode', options.colorMode!);
+    }
+    if (options.duplex != null) {
+      b.attr(tagKeyword, 'sides', options.duplex!);
     }
     return b.take();
   }
@@ -200,72 +297,6 @@ class IppCodec {
       requestId: requestId,
       groups: groups,
     );
-  }
-}
-
-class IppResponse {
-  const IppResponse({
-    required this.statusCode,
-    required this.requestId,
-    required this.groups,
-  });
-
-  final int statusCode;
-  final int requestId;
-  final List<IppGroup> groups;
-
-  bool get isSuccessful => statusCode >= 0x0000 && statusCode <= 0x00FF;
-
-  /// 返回第一个组里（含跨组首个匹配）名为 [name] 的值列表。
-  List<IppValue> values(String name) => [
-        for (final g in groups)
-          ...g.attributes[name] ?? const <IppValue>[],
-      ];
-
-  IppValue? firstValue(String name) {
-    for (final g in groups) {
-      final v = g.attributes[name];
-      if (v != null && v.isNotEmpty) return v.first;
-    }
-    return null;
-  }
-}
-
-/// 解析后的一个属性组（operation/job/printer/unsupported 组之一）。
-class IppGroup {
-  IppGroup(this.tag);
-
-  /// 组分隔 tag（0x01 operation / 0x02 job / 0x04 printer / 0x05 …）。
-  final int tag;
-
-  /// 组内属性：同名多值时列表按序追加（RFC 8010 §3.1.3）。
-  final Map<String, List<IppValue>> attributes = {};
-
-  /// 同名追加即多值（RFC 8010：后续值零长度名）。
-  void add(String name, IppValue value) =>
-      attributes.putIfAbsent(name, () => <IppValue>[]).add(value);
-}
-
-/// 单个属性值（保留原始字节 + value-tag，按需解码）。
-class IppValue {
-  const IppValue(this.tag, this.raw);
-
-  /// value-tag（0x21 integer / 0x23 enum / 0x44 keyword / 0x47 charset …）。
-  final int tag;
-
-  /// 原始值字节（大端；integer/enum 恒 4 字节）。
-  final Uint8List raw;
-
-  /// 文本类值（keyword/uri/charset/name/mime 等）解码。
-  String get asString => String.fromCharCodes(raw);
-
-  /// integer/enum 值解码（非 4 字节抛 [IppPrintException]）。
-  int get asInt {
-    if (raw.length != 4) {
-      throw IppPrintException('integer/enum value must be 4 bytes, '
-          'got ${raw.length}');
-    }
-    return ByteData.sublistView(raw).getInt32(0, Endian.big);
   }
 }
 

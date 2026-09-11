@@ -2,30 +2,11 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import '../models.dart';
+import 'ipp_log.dart';
 import 'ipp_message.dart';
 
-/// Get-Printer-Attributes 的解析结果。
-class PrinterAttributes {
-  const PrinterAttributes({
-    this.mediaSupported = const <String>[],
-    this.documentFormats = const <String>[],
-    this.state,
-    this.makeModel,
-  });
-
-  final List<String> mediaSupported;
-  final List<String> documentFormats;
-  final String? state;
-  final String? makeModel;
-
-  /// IPP printer-state 枚举 → 可读状态。
-  static String? stateFromEnum(int? v) => switch (v) {
-        3 => 'idle',
-        4 => 'processing',
-        5 => 'stopped',
-        _ => null,
-      };
-}
+part 'ipp_client_inspect.dart';
+part 'ipp_client_validate.dart';
 
 /// job-state 枚举（RFC 8011 §5.3.7 / IPP Guide：3 pending、4 pending-held、
 /// 5 processing、6 processing-stopped、7 canceled、8 aborted、9 completed）。
@@ -123,33 +104,12 @@ class IppClient {
     final request = await _http.postUrl(httpEndpoint);
     request.headers.set(HttpHeaders.contentTypeHeader, 'application/ipp');
     request.headers.set(HttpHeaders.acceptEncodingHeader, 'identity');
-    request.headers.set(HttpHeaders.userAgentHeader, 'ipp_print/0.2');
+    request.headers.set(HttpHeaders.userAgentHeader, 'ipp_print/0.3');
     request.headers.contentLength = ippBody.length;
     request.add(ippBody);
     final response = await request.close();
     final body = await _collect(response);
     return (response.statusCode, body);
-  }
-
-  Future<PrinterAttributes> getPrinterAttributes(DiscoveredPrinter p) async {
-    final res = await post(
-      p.httpUri,
-      IppCodec.buildGetPrinterAttributes(
-        printerUri: p.ippUriString,
-        requestId: _nextRequestId,
-      ),
-    );
-    _ensureSuccess(res, 'Get-Printer-Attributes');
-    final printerGroup = res.groups
-        .where((g) => g.tag == IppCodec.tagPrinterGroup)
-        .toList(growable: false);
-    final g = printerGroup.isEmpty ? null : printerGroup.first;
-    return PrinterAttributes(
-      mediaSupported: _keywords(g, 'media-supported'),
-      documentFormats: _keywords(g, 'document-format-supported'),
-      state: PrinterAttributes.stateFromEnum(_enumOf(g, 'printer-state')),
-      makeModel: g?.attributes['printer-make-and-model']?.first.asString,
-    );
   }
 
   /// 提交 Print-Job，返回打印机分配的 job-id。
@@ -229,15 +189,25 @@ class IppClient {
       ),
     );
     _ensureSuccess(res, 'Get-Jobs');
-    return [
-      for (final g in res.groups.where((g) => g.tag == IppCodec.tagJobGroup))
-        IppJobSummary(
-          jobId: _intOf(g, 'job-id') ?? 0,
-          jobState: IppJobState.fromCode(_intOf(g, 'job-state') ?? 3),
-          jobName: _stringOf(g, 'job-name'),
-          userName: _stringOf(g, 'job-originating-user-name'),
-        ),
-    ];
+    // 脏组防御：缺 job-id / job-state 的组不满足 IppJobSummary 契约，
+    // 静默补 0/pending 会掩盖解析异常——跳过并记录（TODO 0.3 项）。
+    final summaries = <IppJobSummary>[];
+    for (final g in res.groups.where((g) => g.tag == IppCodec.tagJobGroup)) {
+      final jobId = _intOf(g, 'job-id');
+      final stateCode = _intOf(g, 'job-state');
+      if (jobId == null || stateCode == null) {
+        ippLog('getJobs: skip dirty group (job-id=$jobId, '
+            'job-state=$stateCode, keys=${g.attributes.keys.toList()})');
+        continue;
+      }
+      summaries.add(IppJobSummary(
+        jobId: jobId,
+        jobState: IppJobState.fromCode(stateCode),
+        jobName: _stringOf(g, 'job-name'),
+        userName: _stringOf(g, 'job-originating-user-name'),
+      ));
+    }
+    return summaries;
   }
 
   /// 轮询到终态或超时（终态含 completed/aborted/canceled）。
@@ -282,28 +252,6 @@ class IppClient {
     if (!res.isSuccessful) {
       throw IppStatusException(res.statusCode, '$op failed');
     }
-  }
-
-  List<String> _keywords(IppGroup? g, String name) => [
-        for (final v in g?.attributes[name] ?? const <IppValue>[]) v.asString,
-      ];
-
-  int? _enumOf(IppGroup? g, String name) {
-    final values = g?.attributes[name];
-    if (values == null || values.isEmpty) return null;
-    return values.first.asInt;
-  }
-
-  int? _intOf(IppGroup g, String name) {
-    final values = g.attributes[name];
-    if (values == null || values.isEmpty) return null;
-    return values.first.asInt;
-  }
-
-  String? _stringOf(IppGroup g, String name) {
-    final values = g.attributes[name];
-    if (values == null || values.isEmpty) return null;
-    return values.first.asString;
   }
 
   static Future<Uint8List> _collect(HttpClientResponse response) async {

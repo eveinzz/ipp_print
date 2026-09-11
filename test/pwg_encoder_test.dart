@@ -28,8 +28,16 @@ List<int> _expectedHeader({
   // float 1.0 的网络字节序 = 0x3F800000
   const f1 = [0x3F, 0x80, 0x00, 0x00];
 
+  void f32(int off, double v) {
+    final b = ByteData(4)..setFloat32(0, v, Endian.big);
+    out.setRange(off, off + 4, b.buffer.asUint8List());
+  }
+
   u32(276, dpi); // HWResolution[0]
   u32(280, dpi); // HWResolution[1]
+  // PageSize[2]（点）：显式页尺寸 = 像素 × 72 / dpi（不交打印机默认裁决）
+  u32(352, (width * 72 / dpi).round());
+  u32(356, (height * 72 / dpi).round());
   u32(372, width); // cupsWidth
   u32(376, height); // cupsHeight
   u32(384, 8); // cupsBitsPerColor
@@ -38,6 +46,8 @@ List<int> _expectedHeader({
   u32(400, 19); // cupsColorSpace = sRGB-8
   u32(420, 3); // cupsNumColors
   out.setRange(424, 428, f1); // cupsBorderlessScalingFactor = 1.0
+  f32(428, width * 72 / dpi); // cupsPageSize[0]
+  f32(432, height * 72 / dpi); // cupsPageSize[1]
   u32(452 + 8 * 4, 4); // cupsInteger[8] = PrintQuality normal
   return out;
 }
@@ -293,6 +303,18 @@ void main() {
       final packedRow = _packed([[0x00, ..._red]]);
       final expected = _expectedPage(width: 1, height: 2, runs: [(2, packedRow)]);
       expect(encoder.encodePage(page), expected);
+    });
+
+    test('页头显式页尺寸：像素 × 72 / dpi（回归锚点）', () {
+      // 此前 PageSize[0]/[1] = 0（交打印机默认纸张裁决），介质解析
+      // 不一致的打印机会裁切/缩放位图（用户实测「只显示一半」类表现）。
+      // 500×707@300dpi → 120.0 × 169.68 pt。
+      final out = encoder.encodePage(_page(500, 707, Uint8List(500 * 707 * 3)));
+      final h = ByteData.sublistView(out);
+      expect(h.getUint32(352, Endian.big), 120); // 500 × 72 / 300
+      expect(h.getUint32(356, Endian.big), 170); // 707 × 72 / 300 ≈ 169.68
+      expect(h.getFloat32(428, Endian.big), closeTo(120.0, 0.01));
+      expect(h.getFloat32(432, Endian.big), closeTo(169.68, 0.01));
     });
   });
 }

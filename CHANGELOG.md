@@ -5,10 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] — 2026-09-11
 
 ### Added
 
+- **Capability Engine (`inspect()`)**: full standard capability query —
+  `Get-Printer-Attributes` now requests the `fullCapabilityAttributeSet`
+  (24 printer description/status/template attributes: identity, state,
+  `printer-state-reasons`, `printer-is-accepting-jobs`, document formats,
+  media, color, sides, resolutions, `copies-supported` (rangeOfInteger),
+  finishings, IPP versions, operations, job-creation attributes, URI
+  security) and parses them leniently into the new `PrinterCapabilities`
+  model — every field comes from deterministic printer self-reporting
+  (RFC 8011 §6.2), missing attributes stay null/empty, nothing is
+  inferred. New value-syntax decoders: resolution (RFC 8011 §5.1.14),
+  rangeOfInteger (§5.1.15), boolean (§5.1.12).
+- **Validate-Job preflight (`validateJob()`)**: operation 0x0004
+  (RFC 8011 §4.2.3, CUPS ipp.h cross-checked) with the structured
+  `PrintValidationResult` — `valid` + the printer's Unsupported
+  Attributes group (tag 0x05) surfaced by name, so hosts can ask
+  "can you print this job?" before submitting megabytes of document data.
+- **Color/duplex capability negotiation**: `Get-Printer-Attributes` now
+  requests `print-color-mode-supported` / `-default` and
+  `sides-supported` / `-default` (default request set: 4 → 8 attributes),
+  and `probe()` surfaces them on `PrinterInfo` as `colorModesSupported`,
+  `colorModeDefault`, `sidesSupported`, `sidesDefault` — so host UIs can
+  offer **only the values the printer declares support for**.
 - Debug diagnostics (`ippLog`, `ippProbeLog`, `#if DEBUG` only): discovery
   lifecycle (`register` / `discover start` / `didFind` / `resolved` with the
   resolved host / `didNotResolve` / `didNotSearch` / finish summary) and
@@ -18,8 +40,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on the same port (RFC 2817 spirit). Real-printer verified on the
   TLS-only EPSON L3250.
 
+### Changed
+
+- **`discover()` browses the three service types in parallel** instead of
+  sequentially: worst-case wall time drops from 3×timeout to ≈ one window;
+  cross-type results merge by printer identity (plaintext instance
+  preferred, `mergeDedup` unit-tested).
+- User-Agent string updated to `ipp_print/0.3`.
+
 ### Fixed
 
+- **`getJobs` no longer silently fabricates dirty job rows**: groups
+  missing `job-id` / `job-state` are skipped and logged instead of being
+  reported as job 0 / pending, which masked parse anomalies.
+- **Job-template attributes are now uniformly omit-when-null**:
+  `PrintOptions.media` and `PrintOptions.duplex` are nullable (defaults
+  unchanged), and `Print-Job` omits `media` / `print-color-mode` / `sides`
+  when null so the printer applies its own `*-default` (RFC 8011 §5.2).
+  Previously `media`/`sides` were always sent, which forced a hard-coded A4
+  media even when the document was laid out for another paper size.
 - **Native discovery: resolved `NetService` was not retained** — the
   delegate callback's service was released by ARC as soon as the browser
   delegate method returned, silently cancelling `resolve` (with no

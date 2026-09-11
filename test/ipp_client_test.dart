@@ -58,6 +58,12 @@ class FakeIppServer {
   void enqueueHttp(List<int>? rawResponseOrNull) =>
       _pendingHttp.add(rawResponseOrNull);
 
+  final _pendingIpp = <List<int>?>[];
+
+  /// 预排 IPP 体（绕过按 operation-id 路由的默认响应，供 Validate-Job /
+  /// 能力集 / 脏数据等任意场景注入）。
+  void enqueueIpp(List<int>? ippBodyOrNull) => _pendingIpp.add(ippBodyOrNull);
+
   int _findHeaderEnd(List<int> bytes) {
     for (var i = 0; i + 3 < bytes.length; i++) {
       if (bytes[i] == 13 && bytes[i + 1] == 10 //
@@ -83,7 +89,8 @@ class FakeIppServer {
   /// Get-Job-Attributes / Cancel-Job / Get-Jobs。
   List<int> _respond(Uint8List request) {
     final op = (request[2] << 8) | request[3];
-    final ipp = switch (op) {
+    final pre = _pendingIpp.isEmpty ? null : _pendingIpp.removeAt(0);
+    final ipp = pre ?? switch (op) {
       IppCodec.opPrintJob => _printJobResponse(),
       IppCodec.opGetPrinterAttributes => _printerAttributesResponse(),
       IppCodec.opCancelJob => _cancelJobResponse(),
@@ -144,7 +151,15 @@ Uint8List _printerAttributesResponse() => _wrap(
           _raw(0x44, _s('na_letter_8.5x11in')) +
           _attr(0x44, 'document-format-supported', _s('image/pwg-raster')) +
           _attr(0x23, 'printer-state', _i32(3)) +
-          _attr(0x42, 'printer-make-and-model', _s('EPSON L3250 Series')),
+          _attr(0x42, 'printer-make-and-model', _s('EPSON L3250 Series')) +
+          // 色彩/双面能力协商（宿主 UI 可选项数据源）
+          _attr(0x44, 'print-color-mode-supported', _s('color')) +
+          _raw(0x44, _s('monochrome')) +
+          _raw(0x44, _s('auto')) +
+          _attr(0x44, 'print-color-mode-default', _s('auto')) +
+          _attr(0x44, 'sides-supported', _s('one-sided')) +
+          _raw(0x44, _s('two-sided-long-edge')) +
+          _attr(0x44, 'sides-default', _s('one-sided')),
     );
 
 Uint8List _jobStateResponse() => _wrap(
@@ -205,6 +220,15 @@ void main() {
     expect(attrs.documentFormats, ['image/pwg-raster']);
     expect(attrs.state, 'idle');
     expect(attrs.makeModel, 'EPSON L3250 Series');
+  });
+
+  test('getPrinterAttributes：解析色彩/双面 supported 与 default（UI 可选项数据源）',
+      () async {
+    final attrs = await client.getPrinterAttributes(printer);
+    expect(attrs.colorModesSupported, ['color', 'monochrome', 'auto']);
+    expect(attrs.colorModeDefault, 'auto');
+    expect(attrs.sidesSupported, ['one-sided', 'two-sided-long-edge']);
+    expect(attrs.sidesDefault, 'one-sided');
   });
 
   test('submitJob：返回打印机分配的 job-id，请求含文档数据', () async {
@@ -294,6 +318,150 @@ void main() {
     // 请求应携带 Get-Jobs 操作码（0x000A）
     expect(server.requests.single[2] << 8 | server.requests.single[3],
         IppCodec.opGetJobs);
+  });
+
+  test('getJobs：缺 job-id/job-state 的脏组被跳过（不再静默 0/pending）',
+      () async {
+    final b = BytesBuilder()
+      ..add([0x01, 0x01, 0x00, 0x00, 0, 0, 0, 7])
+      ..addByte(0x01)
+      ..add(_attr(0x47, 'attributes-charset', _s('utf-8')))
+      ..add(_attr(0x48, 'attributes-natural-language', _s('en')));
+    b..addByte(0x02)
+      ..add(_attr(0x21, 'job-id', _i32(42)))
+      ..add(_attr(0x23, 'job-state', _i32(5)));
+    // 脏组：只有 job-name，缺 job-id 与 job-state。
+    b..addByte(0x02)
+      ..add(_attr(0x42, 'job-name', _s('dirty')));
+    b..addByte(0x02)
+      ..add(_attr(0x21, 'job-id', _i32(43)))
+      ..add(_attr(0x23, 'job-state', _i32(9)));
+    b.addByte(0x03);
+    server.enqueueIpp(b.toBytes());
+
+    final jobs = await client.getJobs(printer);
+    expect(jobs, hasLength(2));
+    expect(jobs.map((j) => j.jobId), [42, 43]);
+  });
+
+  test('getPrinterCapabilities：全量能力解析（resolution/range/boolean/enum）',
+      () async {
+    List<int> res(int cross, int feed, int unit) =>
+        [..._i32(cross), ..._i32(feed), unit];
+    List<int> range(int low, int high) => [..._i32(low), ..._i32(high)];
+
+    final List<List<int>> attrs = [
+      _attr(0x42, 'printer-name', _s('EPSON L3250 Series')),
+      _attr(0x42, 'printer-info', _s('EPSON Tank Printer')),
+      _attr(0x42, 'printer-make-and-model', _s('EPSON L3250 Series')),
+      _attr(0x23, 'printer-state', _i32(3)),
+      _attr(0x44, 'printer-state-reasons', _s('none')),
+      _attr(0x22, 'printer-is-accepting-jobs', [0x01]),
+      _attr(0x44, 'document-format-supported', _s('image/pwg-raster')) +
+          _raw(0x44, _s('application/octet-stream')),
+      _attr(0x44, 'document-format-default', _s('image/pwg-raster')),
+      _attr(0x44, 'media-supported', _s('iso_a4_210x297mm')) +
+          _raw(0x44, _s('na_letter_8.5x11in')),
+      _attr(0x44, 'media-ready', _s('iso_a4_210x297mm')),
+      _attr(0x44, 'print-color-mode-supported', _s('color')) +
+          _raw(0x44, _s('monochrome')),
+      _attr(0x44, 'print-color-mode-default', _s('auto')),
+      _attr(0x44, 'sides-supported', _s('one-sided')),
+      _attr(0x44, 'sides-default', _s('one-sided')),
+      // resolution 语法：cross(i32)+feed(i32)+unit(3=dpi)，RFC 8011 §5.1.14
+      _attr(0x35, 'printer-resolution-supported', res(300, 300, 3)) +
+          _raw(0x35, res(600, 600, 3)),
+      _attr(0x35, 'printer-resolution-default', res(300, 300, 3)),
+      // rangeOfInteger 语法：两个 i32，RFC 8011 §5.1.15
+      _attr(0x33, 'copies-supported', range(1, 99)),
+      // finishings-supported = 1setOf type2 enum（RFC 8011 §5.2.3）
+      _attr(0x23, 'finishings-supported', _i32(3)),
+      _attr(0x44, 'ipp-versions-supported', _s('1.1')),
+      _attr(0x23, 'operations-supported', _i32(0x0002)) +
+          _raw(0x23, _i32(0x000B)),
+      _attr(0x44, 'job-creation-attributes-supported', _s('media')) +
+          _raw(0x44, _s('copies')),
+      _attr(0x44, 'uri-authentication-supported', _s('none')),
+      _attr(0x44, 'uri-security-supported', _s('none')),
+      _attr(0x45, 'printer-uri-supported', _s('ipp://p.local:631/ipp/print')),
+    ];
+    server.enqueueIpp(_wrap(0, [0x04], [for (final part in attrs) ...part]));
+
+    final caps = await client.getPrinterCapabilities(printer);
+    expect(caps.name, 'EPSON L3250 Series');
+    expect(caps.info, 'EPSON Tank Printer');
+    expect(caps.state, 'idle');
+    expect(caps.isAcceptingJobs, isTrue);
+    expect(caps.stateReasons, ['none']);
+    expect(caps.documentFormats,
+        ['image/pwg-raster', 'application/octet-stream']);
+    expect(caps.documentFormatDefault, 'image/pwg-raster');
+    expect(caps.mediaSupported, ['iso_a4_210x297mm', 'na_letter_8.5x11in']);
+    expect(caps.mediaReady, ['iso_a4_210x297mm']);
+    expect(caps.colorModesSupported, ['color', 'monochrome']);
+    expect(caps.colorModeDefault, 'auto');
+    expect(caps.sidesSupported, ['one-sided']);
+    expect(caps.resolutionsSupported, ['300x300dpi', '600x600dpi']);
+    expect(caps.resolutionDefault, '300x300dpi');
+    expect(caps.copiesMin, 1);
+    expect(caps.copiesMax, 99);
+    expect(caps.finishingsSupported, [3]);
+    expect(caps.ippVersionsSupported, ['1.1']);
+    expect(caps.operationsSupported, [0x0002, 0x000B]);
+    expect(caps.jobCreationAttributesSupported, ['media', 'copies']);
+    expect(caps.uriAuthenticationSupported, ['none']);
+    expect(caps.uriSecuritySupported, ['none']);
+    expect(caps.urisSupported, ['ipp://p.local:631/ipp/print']);
+    // inspect 必须携带完整能力请求集（能力只来自确定性自报）。
+    final reqOp = server.requests.last[2] << 8 | server.requests.last[3];
+    expect(reqOp, IppCodec.opGetPrinterAttributes);
+  });
+
+  test('validateJob：打印机接受（0x0000）→ valid，无 unsupported', () async {
+    server.enqueueIpp(_wrap(0, [0x02], const <int>[]));
+    final result = await client.validateJob(
+      printer,
+      documentFormat: 'image/pwg-raster',
+    );
+    expect(result.valid, isTrue);
+    expect(result.statusCode, 0x0000);
+    expect(result.unsupportedAttributes, isEmpty);
+    // 请求必须是 Validate-Job（0x0004）且声明 document-format。
+    final req = server.requests.single;
+    expect(req[2] << 8 | req[3], IppCodec.opValidateJob);
+    final parsed = IppCodec.parseResponse(req);
+    expect(parsed.firstValue('document-format')!.asString, 'image/pwg-raster');
+  });
+
+  test('validateJob：打印机接受但声明不支持值 → unsupported 组透出', () async {
+    // RFC 8011 §4.2.3：响应组 2 = Unsupported Attributes（组 tag 0x05）。
+    final b = BytesBuilder()
+      ..add([0x01, 0x01, 0x00, 0x00, 0, 0, 0, 7])
+      ..addByte(0x01)
+      ..add(_attr(0x47, 'attributes-charset', _s('utf-8')))
+      ..add(_attr(0x48, 'attributes-natural-language', _s('en')))
+      ..addByte(0x05)
+      ..add(_attr(0x44, 'sides', _s('two-sided-long-edge')))
+      ..addByte(0x03);
+    server.enqueueIpp(b.toBytes());
+
+    final result = await client.validateJob(
+      printer,
+      documentFormat: 'image/pwg-raster',
+      options: const PrintOptions(duplex: 'two-sided-long-edge'),
+    );
+    expect(result.valid, isTrue);
+    expect(result.unsupportedAttributes, ['sides']);
+  });
+
+  test('validateJob：打印机拒绝（0x040B）→ valid=false 透出状态码', () async {
+    server.enqueueIpp(_wrap(0x040B, [0x02], const <int>[]));
+    final result = await client.validateJob(
+      printer,
+      documentFormat: 'image/pwg-raster',
+    );
+    expect(result.valid, isFalse);
+    expect(result.statusCode, 0x040B);
   });
 
   test('secure 打印机走 https 端点（ipps）——连接本地明文服务器应握手失败',

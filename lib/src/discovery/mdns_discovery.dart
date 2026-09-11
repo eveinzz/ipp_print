@@ -1,3 +1,4 @@
+import 'package:meta/meta.dart';
 import 'package:multicast_dns/multicast_dns.dart';
 
 import '../capability/capability.dart';
@@ -24,36 +25,63 @@ class MDnsPrinterDiscovery implements PrinterDiscovery {
   ];
 
   /// 在 [timeout] 内浏览局域网并返回去重后的打印机列表。
+  ///
+  /// 三类服务**并行**浏览（0.3）：最坏耗时从 顺序 3×timeout 降为
+  /// ≈单窗口 timeout；各分支结果经 [mergeDedup] 按 identity 合并，
+  /// 同 UUID 双广播（_ipp + _ipps）保留明文实例。
   @override
   Future<List<DiscoveredPrinter>> discover({
     Duration timeout = const Duration(seconds: 5),
   }) async {
     final client = MDnsClient();
-    final printers = <String, DiscoveredPrinter>{};
     try {
       await client.start();
-      for (final serviceType in serviceTypes) {
-        await for (final ptr in client.lookup<PtrResourceRecord>(
-          ResourceRecordQuery.serverPointer(serviceType),
-          timeout: timeout,
-        )) {
-          final printer = await _resolveInstance(
-            client,
-            ptr.domainName,
-            timeout,
-            secure: serviceType == '_ipps._tcp.local',
-          );
-          if (printer == null) continue;
-          // 去重偏好：同一 UUID 双广播（_ipp + _ipps）时保留明文实例，
-          // 避免不必要的 TLS 开销与自签证书问题（RFC 6763 同名服务合并）。
-          final existing = printers[printer.identity];
-          if (existing == null || (existing.secure && !printer.secure)) {
-            printers[printer.identity] = printer;
-          }
-        }
-      }
+      final perType = await Future.wait(<Future<List<DiscoveredPrinter>>>[
+        for (final serviceType in serviceTypes)
+          _browseType(client, serviceType, timeout),
+      ]);
+      return mergeDedup(perType);
     } finally {
       client.stop();
+    }
+  }
+
+  /// 单一服务类型的浏览与解析（PTR → SRV/TXT/A）。
+  Future<List<DiscoveredPrinter>> _browseType(
+    MDnsClient client,
+    String serviceType,
+    Duration timeout,
+  ) async {
+    final found = <DiscoveredPrinter>[];
+    final secure = serviceType == '_ipps._tcp.local';
+    await for (final ptr in client.lookup<PtrResourceRecord>(
+      ResourceRecordQuery.serverPointer(serviceType),
+      timeout: timeout,
+    )) {
+      final printer = await _resolveInstance(
+        client,
+        ptr.domainName,
+        timeout,
+        secure: secure,
+      );
+      if (printer != null) found.add(printer);
+    }
+    return found;
+  }
+
+  /// 跨类型结果合并：按 [DiscoveredPrinter.identity] 去重，同一 UUID
+  /// 双广播（_ipp + _ipps）时保留明文实例（避免不必要的 TLS 开销与
+  /// 自签证书问题；RFC 6763 同名服务合并）。
+  @visibleForTesting
+  static List<DiscoveredPrinter> mergeDedup(
+    Iterable<List<DiscoveredPrinter>> sources,
+  ) {
+    final printers = <String, DiscoveredPrinter>{};
+    for (final printer in sources.expand((s) => s)) {
+      final existing = printers[printer.identity];
+      if (existing == null || (existing.secure && !printer.secure)) {
+        printers[printer.identity] = printer;
+      }
     }
     return printers.values.toList(growable: false);
   }

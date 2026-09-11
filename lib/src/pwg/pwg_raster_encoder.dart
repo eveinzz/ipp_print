@@ -83,11 +83,14 @@ class PwgRasterEncoder {
     u32(328, 0); // MediaWeight
     u32(332, 0); // MirrorPrint
     u32(336, 0); // NegativePrint
-    u32(340, 0); // NumCopies
-    u32(344, 0); // Orientation
+    u32(340, 0); // NumCopies（份数走 IPP copies 作业属性，页头置 0）
+    u32(344, 0); // Orientation（0 = portrait，与栅格位图方向一致）
     u32(348, 0); // OutputFaceUp
-    u32(352, 0); // PageSize[0]（0 = 使用默认纸张）
-    u32(356, 0); // PageSize[1]
+    // PageSize[2]（点）：显式声明页尺寸（像素 × 72 / dpi），不再交给
+    // 打印机「默认纸张」裁决——0 值曾使介质解析不一致的打印机按自身
+    // 默认纸裁切/缩放位图（用户实测「打出来只显示一半」类表现）。
+    u32(352, (page.width * 72 / dpi).round()); // PageSize[0]
+    u32(356, (page.height * 72 / dpi).round()); // PageSize[1]
     u32(360, 0); // Separations
     u32(364, 0); // TraySwitch
     u32(368, 0); // Tumble
@@ -105,8 +108,11 @@ class PwgRasterEncoder {
     u32(416, 0); // cupsRowStep
     u32(420, 3); // cupsNumColors
     f32(424, 1.0); // cupsBorderlessScalingFactor
-    f32(428, 0.0); // cupsPageSize[0]
-    f32(432, 0.0); // cupsPageSize[1]
+    // cupsPageSize[2]（浮点，点）：与 PageSize 同值，显式声明页尺寸
+    final pageWpt = page.width * 72 / dpi;
+    final pageHpt = page.height * 72 / dpi;
+    f32(428, pageWpt); // cupsPageSize[0]
+    f32(432, pageHpt); // cupsPageSize[1]
     f32(436, 0.0); // cupsImagingBBox[0..3]
     f32(440, 0.0);
     f32(444, 0.0);

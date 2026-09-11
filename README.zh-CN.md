@@ -41,6 +41,8 @@
   - `ippDirect` —— 无 URF 但 `pdl` 含 `image/pwg-raster`；可由本包直连打印。
   - `vendorOnly` —— 仅厂商私有格式；引导用户使用厂商 App。
 - **IPP 1.1 客户端**（RFC 8010 / RFC 8011）：`Print-Job`、`Get-Printer-Attributes`、`Get-Job-Attributes`、`Get-Jobs`、`Cancel-Job`；作业状态轮询带瞬态故障容错。
+- **能力引擎** —— `inspect()` 返回 `PrinterCapabilities`：24 项标准属性（身份、状态与原因、是否收作业、文档格式、介质、色彩、双面、分辨率、份数区间、整饰、IPP 版本、操作集、URI 安全），全部**从打印机确定性自报 lenient 解析**（RFC 8011 §6.2）——属性缺失即不支持，绝不推断。新值语法解码：resolution（§5.1.14）、rangeOfInteger（§5.1.15）、boolean（§5.1.12）。
+- **Validate-Job 预检** —— `validateJob()` 先问打印机「这个 Job 你能不能处理」（操作码 0x0004，不带文档数据），返回结构化 `PrintValidationResult`（含 Unsupported Attributes 组，组 tag 0x05）——大文档只在明确放行后才提交。
 - **TLS 传输** —— 仅广播 `_ipps._tcp` 的机型可直接打印（`https://` 端点，默认接受自签证书）。
 - **PWG-raster 编码器**（PWG 5102.4）：1796 字节 `cups_page_header2_t` 页头 + 文件级 `RaS2` 同步字（每文档一次）+ 行组（1 字节行重复计数，1–256 行）+ 像素粒度 PackBits-like 游程编码（sRGB-8，bpp=3）—— 与规范 §4.4.2 样本位图及 CUPS `raster-stream.c` 逐字节比对验证；真机出纸验证通过（EPSON L3250）。
 - **纯 Dart，零 Flutter 依赖** —— 协议核心可离线单测；PDF 栅格化通过 `PdfRasterizer` 端口注入（例如由 `printing` 的 `rasterPdf` 实现）。
@@ -102,6 +104,21 @@ for (final p in printers) {
 // 2. 探测所选打印机，协商能力。
 final status = await ipp.probe(printer);
 
+// 2b. 或深度检视：这台机器究竟能干什么？
+final caps = await ipp.inspect(printer);
+print(caps.makeModel);           // "EPSON L3250 Series"
+print(caps.documentFormats);     // 来自 document-format-supported
+print(caps.colorModesSupported); // 宿主 UI 可选项——绝不猜测
+print('${caps.copiesMin}-${caps.copiesMax} 份');
+
+// 2c. 提交大文档前先预检作业票。
+final validation = await ipp.validateJob(
+  printer,
+  documentFormat: 'image/pwg-raster',
+  options: const PrintOptions(duplex: 'two-sided-long-edge'),
+);
+if (!validation.valid) { /* 把 validation.statusCode 呈现给宿主 */ }
+
 // 3. 通过 IPP 直连打印 PDF（仅 ippDirect）。
 if (status == PrinterProbeStatus.ready) {
   await for (final progress in ipp.printPdf(
@@ -118,12 +135,28 @@ if (status == PrinterProbeStatus.ready) {
 
 `printPdf` 可传 `PrintOptions`：
 
+**统一语义：`null` = 不下发该属性**，由打印机应用自身 `*-default`
+（RFC 8011 §5.2 job template 默认值语义）。宿主无法从打印机声明能力中
+确定取值时应传 `null`，而**不是猜一个值**。
+
 | 字段 | 默认值 | 对应 IPP 作业属性 | 说明 |
 |---|---|---|---|
-| `copies` | `1` | `copies` | 份数 |
-| `media` | `iso_a4_210x297mm` | `media` | PWG 自描述介质名；应取自打印机 `media-supported` |
-| `duplex` | `one-sided` | `sides` | `one-sided` / `two-sided-long-edge` / `two-sided-short-edge` |
-| `colorMode` | `null` | `print-color-mode` | **`null` = 不下发该属性** → 打印机按 RFC 8011 使用自己的 `print-color-mode-default`（典型为 `auto`：彩色页自动彩打、其余自动单色）。显式指定（`color` / `monochrome` 等）则原样下发，取值应为打印机 `print-color-mode-supported` 的成员（全集见 PWG 5107.3 §6.2.27）。 |
+| `copies` | `1` | `copies` | 份数（恒下发；份数无「打印机默认」语义） |
+| `media` | `iso_a4_210x297mm` | `media` | PWG 介质名；应取自打印机 `media-supported`（`null` = 不下发，用 `media-default`） |
+| `duplex` | `one-sided` | `sides` | `one-sided` / `two-sided-long-edge` / `two-sided-short-edge`；取值应为 `sides-supported` 的成员（`null` = 不下发，用 `sides-default`） |
+| `colorMode` | `null` | `print-color-mode` | `null` = 不下发 → 打印机用 `print-color-mode-default`（典型为 `auto`）。显式指定（`color` / `monochrome` 等）则原样下发，取值应为打印机 `print-color-mode-supported` 的成员（全集见 PWG 5107.3 §6.2.27）。 |
+
+### 能力协商（宿主 UI 数据源）
+
+`probe()` 的 `PrinterInfo` 除介质/格式外，还透出色彩与双面能力声明，
+供宿主 UI **只展示打印机声明支持的取值**：
+
+| 字段 | 对应 IPP 打印机属性 |
+|---|---|
+| `colorModesSupported` / `colorModeDefault` | `print-color-mode-supported` / `-default` |
+| `sidesSupported` / `sidesDefault` | `sides-supported` / `-default` |
+
+工程纪律：能力只来自 IPP 确定性字段，**禁止按机型推断**。
 
 ### iOS 宿主配置
 
@@ -158,6 +191,8 @@ if (status == PrinterProbeStatus.ready) {
 | `Cancel-Job`（job-id 必需） | RFC 8011 / IPP Guide | §4.3.3、Appendix A |
 | `Get-Jobs`（which-jobs / my-jobs / requested-attributes） | RFC 8011 / IPP Guide | §4.2.6、Appendix A |
 | `ipps://` 传输（IPP over HTTPS + ipps URI scheme） | RFC 7472 | §3–4 |
+| `Validate-Job` 预检（操作码 0x0004，无文档数据；Unsupported Attributes 在组 2 返回） | RFC 8011 | §4.2.3 |
+| 能力查询集（`xxx-supported` / `xxx-default`；打印机未应答该属性 = 不支持） | RFC 8011 | §6.2 |
 | PWG-raster 页头（1796 字节 `cups_page_header2_t`，文件级 RaS2 同步字，sRGB-8=19） | PWG 5102.4 | §4 |
 | 介质自描述名 `iso_a4_210x297mm` | PWG 5101.1（Media Names） | — |
 | 浏览 `_ipp._tcp` / `_ipps._tcp` / `_universal._sub._ipp._tcp` | RFC 6763（DNS-SD）+ Apple AirPrint 规约 | — |

@@ -2,18 +2,16 @@ import 'dart:async' show TimeoutException;
 import 'dart:io' show SocketException;
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show kDebugMode;
-
 import 'capability/capability.dart';
 import 'discovery/native_bonjour_discovery.dart' show defaultPlatformDiscovery;
 import 'ipp/ipp_client.dart';
+import 'ipp/ipp_log.dart';
 import 'models.dart';
 import 'pwg/pwg_raster_encoder.dart';
 
 /// 诊断日志：仅 DEBUG 输出，前缀与原生层一致，release 零开销。
-void ippProbeLog(String message) {
-  if (kDebugMode) print('[ipp_print] $message');
-}
+/// （统一实现在 [ippLog]，本函数保留旧名以兼容既有调用方。）
+void ippProbeLog(String message) => ippLog(message);
 
 /// Facade：插件唯一入口。
 ///
@@ -71,6 +69,10 @@ class IppPrint {
         documentFormats: formats,
         state: attrs.state,
         makeModel: attrs.makeModel,
+        colorModesSupported: attrs.colorModesSupported,
+        colorModeDefault: attrs.colorModeDefault,
+        sidesSupported: attrs.sidesSupported,
+        sidesDefault: attrs.sidesDefault,
       );
       onInfo?.call(info);
       return ok ? PrinterProbeStatus.ready : PrinterProbeStatus.unsupported;
@@ -87,6 +89,42 @@ class IppPrint {
       return PrinterProbeStatus.unsupported;
     }
   }
+
+  /// 能力引擎（0.3）：完整能力集查询——「这台机器究竟能干什么」。
+  ///
+  /// 返回 [PrinterCapabilities]（文档/介质/色彩/双面/分辨率/份数/作业/
+  /// 安全，全部来自打印机自报，缺失即 null/空）。与 [probe] 的区别：
+  /// probe 面向「可否直连」的状态机判定（8 属性集），inspect 面向
+  /// 宿主 UI 的全量能力展示与 0.4 格式协商的数据源。
+  /// 整机限时 10s（同 probe 挂起防御），超时抛 [IppPrintException]。
+  Future<PrinterCapabilities> inspect(DiscoveredPrinter printer) async {
+    ippProbeLog('inspect ${printer.name} -> ${printer.httpUriString}');
+    try {
+      return await _client
+          .getPrinterCapabilities(printer)
+          .timeout(const Duration(seconds: 10));
+    } on TimeoutException {
+      ippProbeLog('inspect ${printer.name}: TIMEOUT (10s)');
+      throw const IppPrintException('inspect: timed out after 10s');
+    }
+  }
+
+  /// Validate-Job 预检（RFC 8011 §4.2.3）：提交大文档前先问打印机
+  /// 「这个 Job 你能不能处理」。返回 [PrintValidationResult]；
+  /// 打印机不支持该操作时返回 client-error-operation-not-supported
+  /// （valid=false），宿主可回退为直接提交。
+  Future<PrintValidationResult> validateJob(
+    DiscoveredPrinter printer, {
+    required String documentFormat,
+    PrintOptions options = const PrintOptions(),
+    String jobName = 'ipp_print-document',
+  }) =>
+      _client.validateJob(
+        printer,
+        documentFormat: documentFormat,
+        options: options,
+        jobName: jobName,
+      );
 
   /// PDF → 栅格 → PWG → IPP 直连打印。仅接受 ippDirect 级打印机。
   ///

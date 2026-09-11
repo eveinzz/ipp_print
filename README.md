@@ -41,6 +41,8 @@ Printing itself (IPP over HTTP/TLS) is pure Dart and identical on every platform
   - `ippDirect` — no URF but `pdl` contains `image/pwg-raster`; printable via this package.
   - `vendorOnly` — vendor-private formats only; guide the user to a vendor app.
 - **IPP 1.1 client** (RFC 8010 / RFC 8011): `Print-Job`, `Get-Printer-Attributes`, `Get-Job-Attributes`, `Get-Jobs`, `Cancel-Job`; job-state polling with transient-fault tolerance.
+- **Capability engine** — `inspect()` returns `PrinterCapabilities`: 24 standard attributes (identity, state + reasons, accepting-jobs, document formats, media, color, duplex, resolutions, copies range, finishings, IPP versions, operations, URI security), parsed **leniently from deterministic printer self-report** (RFC 8011 §6.2) — a missing attribute means unsupported, never inferred. New syntax decoders: resolution (§5.1.14), rangeOfInteger (§5.1.15), boolean (§5.1.12).
+- **Validate-Job preflight** — `validateJob()` asks the printer "can you print this job?" (operation 0x0004, no document data) and returns a structured `PrintValidationResult` including the Unsupported Attributes group (tag 0x05), so multi-megabyte documents are only submitted after an explicit go-ahead.
 - **TLS transport** — printers advertising only `_ipps._tcp` are directly printable (`https://` endpoint, self-signed certificates accepted by default).
 - **PWG-raster encoder** (PWG 5102.4): 1796-octet `cups_page_header2_t` page header, file-level `RaS2` sync word (once per document), row groups (1-octet row repeat count, 1–256 rows) with pixel-granularity PackBits-like run-length encoding (sRGB-8, bpp=3) — validated byte-for-byte against the spec's §4.4.2 sample bitmap and CUPS `raster-stream.c`. Real-printer verified (EPSON L3250, end-to-end paper output).
 - **Pure Dart, zero Flutter dependencies** — the protocol core is unit-testable offline; PDF rasterization is injected through the `PdfRasterizer` port (e.g. backed by `printing`'s `rasterPdf`).
@@ -102,6 +104,21 @@ for (final p in printers) {
 // 2. Probe the chosen printer for negotiated capabilities.
 final status = await ipp.probe(printer);
 
+// 2b. Or inspect it in depth: what exactly can this machine do?
+final caps = await ipp.inspect(printer);
+print(caps.makeModel);          // "EPSON L3250 Series"
+print(caps.documentFormats);    // from document-format-supported
+print(caps.colorModesSupported); // host UI options — never guessed
+print('${caps.copiesMin}-${caps.copiesMax} copies');
+
+// 2c. Preflight a job ticket before submitting megabytes of data.
+final validation = await ipp.validateJob(
+  printer,
+  documentFormat: 'image/pwg-raster',
+  options: const PrintOptions(duplex: 'two-sided-long-edge'),
+);
+if (!validation.valid) { /* surface validation.statusCode to the host */ }
+
 // 3. Print a PDF via IPP direct connection (ippDirect only).
 if (status == PrinterProbeStatus.ready) {
   await for (final progress in ipp.printPdf(
@@ -118,12 +135,31 @@ if (status == PrinterProbeStatus.ready) {
 
 `printPdf` accepts a `PrintOptions`:
 
+**Unified semantics: `null` = attribute omitted**, so the printer applies its
+own `*-default` (RFC 8011 §5.2 job-template default semantics). Pass `null`
+whenever the printer's declared capabilities do not determine a value — never
+guess one.
+
 | Field | Default | IPP job attribute | Notes |
 |---|---|---|---|
-| `copies` | `1` | `copies` | integer |
-| `media` | `iso_a4_210x297mm` | `media` | PWG self-describing name; should come from the printer's `media-supported` |
-| `duplex` | `one-sided` | `sides` | `one-sided` / `two-sided-long-edge` / `two-sided-short-edge` |
-| `colorMode` | `null` | `print-color-mode` | **`null` = attribute omitted** → the printer applies its own `print-color-mode-default` per RFC 8011 (typically `auto`: color for color pages, grayscale otherwise). Explicit values (`color` / `monochrome`, …) are sent as-is and should be a member of the printer's `print-color-mode-supported` (full value set: PWG 5107.3 §6.2.27). |
+| `copies` | `1` | `copies` | integer (always sent; there is no "printer default" for copies) |
+| `media` | `iso_a4_210x297mm` | `media` | PWG name; should come from the printer's `media-supported` (`null` = omitted → `media-default`) |
+| `duplex` | `one-sided` | `sides` | `one-sided` / `two-sided-long-edge` / `two-sided-short-edge`; should be a member of `sides-supported` (`null` = omitted → `sides-default`) |
+| `colorMode` | `null` | `print-color-mode` | `null` = attribute omitted → the printer applies its own `print-color-mode-default` per RFC 8011 (typically `auto`). Explicit values (`color` / `monochrome`, …) are sent as-is and should be a member of the printer's `print-color-mode-supported` (full value set: PWG 5107.3 §6.2.27). |
+
+### Capability negotiation (host UI data source)
+
+Beyond media and formats, `probe()`'s `PrinterInfo` also exposes color and
+duplex capability declarations so host UIs can **offer only values the printer
+declares support for**:
+
+| Field | IPP printer attribute |
+|---|---|
+| `colorModesSupported` / `colorModeDefault` | `print-color-mode-supported` / `-default` |
+| `sidesSupported` / `sidesDefault` | `sides-supported` / `-default` |
+
+Engineering rule: capabilities come from deterministic IPP fields only —
+**never inferred from the printer model**.
 
 ### iOS host requirements
 
@@ -158,6 +194,8 @@ Every protocol behavior traces back to an authoritative source; community implem
 | `Cancel-Job` (job-id required) | RFC 8011 / IPP Guide | §4.3.3, Appendix A |
 | `Get-Jobs` (which-jobs / my-jobs / requested-attributes) | RFC 8011 / IPP Guide | §4.2.6, Appendix A |
 | `ipps://` transport (IPP over HTTPS + ipps URI scheme) | RFC 7472 | §3–4 |
+| `Validate-Job` preflight (op 0x0004, no document data; Unsupported Attributes returned in group 2) | RFC 8011 | §4.2.3 |
+| Capability query set (`xxx-supported` / `xxx-default`; printer not answering = unsupported) | RFC 8011 | §6.2 |
 | PWG-raster page header (1796-octet `cups_page_header2_t`, file-level `RaS2` sync word, sRGB-8 = 19) | PWG 5102.4 | §4 |
 | Self-describing media names `iso_a4_210x297mm` | PWG 5101.1 (Media Names) | — |
 | Browsing `_ipp._tcp` / `_ipps._tcp` / `_universal._sub._ipp._tcp` | RFC 6763 (DNS-SD) + Apple AirPrint spec | — |

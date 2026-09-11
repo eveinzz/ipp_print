@@ -86,6 +86,10 @@ void main() {
   final printerOk = _resp(0, 0x04, [
     ..._respKw('media-supported', 'iso_a4_210x297mm'),
     ..._respKw('document-format-supported', 'image/pwg-raster'),
+    ..._respKw('print-color-mode-supported', 'monochrome'),
+    ..._respKw('print-color-mode-default', 'monochrome'),
+    ..._respKw('sides-supported', 'one-sided'),
+    ..._respKw('sides-default', 'one-sided'),
   ]);
   final printerNoPwg = _resp(0, 0x04, [
     ..._respKw('document-format-supported', 'application/octet-stream'),
@@ -101,6 +105,11 @@ void main() {
         onInfo: (i) => info = i);
     expect(status, PrinterProbeStatus.ready);
     expect(info!.mediaSupported, ['iso_a4_210x297mm']);
+    // 能力协商透出：宿主 UI 据此生成色彩/双面可选项
+    expect(info!.colorModesSupported, ['monochrome']);
+    expect(info!.colorModeDefault, 'monochrome');
+    expect(info!.sidesSupported, ['one-sided']);
+    expect(info!.sidesDefault, 'one-sided');
   });
 
   test('probe：TXT 判 ippDirect 但 IPP 不支持 pwg-raster → 降级', () async {

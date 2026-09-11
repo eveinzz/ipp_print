@@ -73,13 +73,30 @@ void main() {
     r.attr(0x49, 'document-format', _s('image/pwg-raster'));
     r.group(0x02);
     r.attr(0x21, 'copies', _i32(options.copies));
-    r.attr(0x44, 'media', _s(options.media));
-    // colorMode 默认 null = 不下发 print-color-mode（RFC 8011 §5.2：
-    // 打印机用 print-color-mode-default）。
-    r.attr(0x44, 'sides', _s(options.duplex));
+    // media / print-color-mode / sides：null = 不下发（RFC 8011 §5.2
+    // job template 默认值语义 → 打印机用自身 *-default）。
+    if (options.media != null) r.attr(0x44, 'media', _s(options.media!));
+    if (options.colorMode != null) {
+      r.attr(0x44, 'print-color-mode', _s(options.colorMode!));
+    }
+    if (options.duplex != null) r.attr(0x44, 'sides', _s(options.duplex!));
     r.end();
 
     expect(actual, r.out.toBytes());
+  });
+
+  test('Print-Job：media/duplex 为 null 时整条属性不下发（回归锚点）', () {
+    final plain = IppCodec.buildPrintJob(
+      printerUri: 'ipp://p.local:631/ipp/print',
+      documentFormat: 'image/pwg-raster',
+      requestId: 3,
+      options: const PrintOptions(media: null, duplex: null),
+    );
+    final s = String.fromCharCodes(plain);
+    expect(s.contains('media'), isFalse);
+    expect(s.contains('sides'), isFalse);
+    // copies 恒下发（份数是必选语义，无「打印机默认」概念）
+    expect(s.contains('copies'), isTrue);
   });
 
   test('Print-Job：显式 colorMode 才下发 print-color-mode（回归锚点）', () {
@@ -107,11 +124,16 @@ void main() {
       printerUri: 'ipp://p.local:631/ipp/print',
       requestId: 1,
     );
-    // 手工验证：报文里 "requested-attributes" 恰好出现一次且含 4 个值
+    // 手工验证：报文里 "requested-attributes" 恰好出现一次且含 8 个值
+    // （后 4 项为色彩/双面能力协商，供宿主 UI 生成可选项）
     final s = String.fromCharCodes(actual);
     expect('requested-attributes'.allMatches(s), hasLength(1));
     expect(s.contains('media-supported'), isTrue);
     expect(s.contains('printer-make-and-model'), isTrue);
+    expect(s.contains('print-color-mode-supported'), isTrue);
+    expect(s.contains('print-color-mode-default'), isTrue);
+    expect(s.contains('sides-supported'), isTrue);
+    expect(s.contains('sides-default'), isTrue);
     // 头部 operation = 0x000B
     expect(actual[2], 0x00);
     expect(actual[3], 0x0B);
@@ -178,6 +200,60 @@ void main() {
     r.end();
 
     expect(actual, r.out.toBytes());
+  });
+
+  test('Validate-Job 请求金标：操作码 0x0004、无文档数据、与 Print-Job 同构',
+      () {
+    const options = PrintOptions();
+    final actual = IppCodec.buildValidateJob(
+      printerUri: 'ipp://EPSONBCAA32.local:631/ipp/print',
+      documentFormat: 'image/pwg-raster',
+      requestId: 9,
+    );
+
+    final r = RefWriter();
+    r.out.add(r.head(IppCodec.opValidateJob, 9));
+    r.group(0x01);
+    r.attr(0x47, 'attributes-charset', _s('utf-8'));
+    r.attr(0x48, 'attributes-natural-language', _s('en'));
+    r.attr(0x45, 'printer-uri', _s('ipp://EPSONBCAA32.local:631/ipp/print'));
+    r.attr(0x42, 'requesting-user-name', _s('ipp_print'));
+    r.attr(0x42, 'job-name', _s('ipp_print-document'));
+    r.attr(0x49, 'document-format', _s('image/pwg-raster'));
+    r.group(0x02);
+    r.attr(0x21, 'copies', _i32(options.copies));
+    r.attr(0x44, 'media', _s(options.media!));
+    r.attr(0x44, 'sides', _s(options.duplex!));
+    r.end();
+
+    // 逐字节金标：报文恰以 end-of-attributes 结尾（无任何文档数据追加，
+    // RFC 8011 §4.2.3「a Client supplies no Document data」）。
+    expect(actual, r.out.toBytes());
+    expect(actual.last, 0x03);
+  });
+
+  test('Get-Printer-Attributes：默认 8 属性集（probe 兼容路径不变）', () {
+    final request = IppCodec.buildGetPrinterAttributes(
+      printerUri: 'ipp://p.local:631/ipp/print',
+      requestId: 1,
+    );
+    final parsed = IppCodec.parseResponse(request);
+    expect(parsed.values('requested-attributes'),
+        hasLength(IppCodec.defaultCapabilityAttributeSet.length));
+  });
+
+  test('Get-Printer-Attributes：能力引擎传 fullCapabilityAttributeSet '
+      '时逐值下发', () {
+    final request = IppCodec.buildGetPrinterAttributes(
+      printerUri: 'ipp://p.local:631/ipp/print',
+      requestId: 1,
+      requestedAttributes: IppCodec.fullCapabilityAttributeSet,
+    );
+    final parsed = IppCodec.parseResponse(request);
+    final requested = [
+      for (final v in parsed.values('requested-attributes')) v.asString,
+    ];
+    expect(requested, IppCodec.fullCapabilityAttributeSet);
   });
 
   test('parseResponse：解析状态码、组、多值属性与 enum/integer', () {
