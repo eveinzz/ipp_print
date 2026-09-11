@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-09-11
+
+### Added
+
+- **Document Pipeline skeleton**:
+  - `PrintDocument` (bytes + mimeType + optional name) — the pipeline input;
+  - `DocumentFormatNegotiator` — stateless pure-function routing: if the
+    printer's declared `document-format-supported` contains the document
+    MIME → passthrough (keeps vector/text); else if it contains
+    `image/pwg-raster` → raster fallback; else throws — "not declared"
+    ≠ "supported", never inferred. Real-device anchor: EPSON L3250
+    declares `[octet-stream, pwg-raster, escpr]` (no PDF), so a PDF
+    document must take the raster fallback (test-anchored);
+  - `DocumentEncoder` abstraction with `PwgRasterEncoder` as the first
+    member (interface only, no rewrite — golden-format tests unchanged);
+  - `models.dart` split into `models/` domain files (identity /
+    capabilities / print options / exceptions) behind a compatible barrel.
+
 ## [0.3.2] — 2026-09-11
 
 ### Fixed

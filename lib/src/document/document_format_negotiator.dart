@@ -6,8 +6,8 @@
 /// **PDF = 仅 SHOULD**（直投必须机会主义，运行时查证声明集）。
 library;
 
-import 'package:ipp_print/src/document/print_document.dart';
-import 'package:ipp_print/src/models.dart';
+import 'print_document.dart';
+import '../models.dart';
 
 /// 协商决策结果。
 class DocumentDecision {
