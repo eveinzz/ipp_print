@@ -96,6 +96,11 @@ void main() {
   final printerNoPwg = _resp(0, 0x04, [
     ..._respKw('document-format-supported', 'application/octet-stream'),
   ]);
+  // 缺失 document-format-supported（声明集为空）——「没有声明能力」
+  // ≠「支持能力」，必须降级（0.3.2 probe 收紧回归锚点）。
+  final printerNoFormats = _resp(0, 0x04, [
+    ..._respKw('media-supported', 'iso_a4_210x297mm'),
+  ]);
 
   test('probe：ippDirect 级 + IPP 查询确认 pwg-raster → ready', () async {
     final client = FakeIppClient({
@@ -124,6 +129,18 @@ void main() {
     final ipp = IppPrint(discovery: _FakeDiscovery(), client: client);
     final status = await ipp.probe(_printer(_l3250Txt));
     expect(status, PrinterProbeStatus.unsupported);
+  });
+
+  test('probe：document-format-supported 缺失（空集）→ 降级不推断', () async {
+    final client = FakeIppClient({
+      IppCodec.opGetPrinterAttributes: printerNoFormats,
+    });
+    final ipp = IppPrint(discovery: _FakeDiscovery(), client: client);
+    PrinterInfo? info;
+    final status = await ipp.probe(_printer(_l3250Txt),
+        onInfo: (i) => info = i);
+    expect(status, PrinterProbeStatus.unsupported);
+    expect(info!.capability, PrinterCapability.vendorOnly);
   });
 
   test('probe：airPrint 级不发起任何网络请求', () async {

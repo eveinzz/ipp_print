@@ -79,6 +79,24 @@ Mopria 官方数据（2026-09 核验）：超过 1.2 亿台认证打印机、10,
   `media-ready`=[]（判纸只能用 `media-supported`）；16K 可命中
   `om_16k_195x270mm`；operations 覆盖插件全部 6 操作。
 
+### 0.3.2 — Consistency & Honesty Sweep（已交付，2026-09-11）
+
+触发：外部复核报告逐条源码级核实。**证实并修复 3 项；证伪 1 项**：
+「公共 API 不闭环」不成立（`PrinterCapabilities`/`inspect()`/`validateJob()`/
+`resolutionsSupported` 均已实现、已导出、92/92 通过）。
+
+- [x] **版本号链收口**：`ios/macos` podspec 停在 0.2.0（外部报告证实）
+  → 统一升至 0.3.2，与 pubspec/CHANGELOG 对齐。
+- [x] **probe 诚实性收紧**：删除 `formats.isEmpty ||` 逃逸口——
+  `document-format-supported` 缺失（空集）→ 降级 unsupported，
+  与「缺≠支持」「不推断」纪律及文件头双源规则一致（附回归锚点测试）。
+- [x] **PrintOptions 残留默认值收口（BREAKING）**：`media`/`duplex`
+  硬默认 `iso_a4_210x297mm`/`one-sided`（会实际下发）→ 默认 null 不下发，
+  与 colorMode 统一「null = 打印机默认」语义；两条逐字节金标改为显式
+  全量构造（线格式不变，全属性路径锚点保留）。
+- [x] `vendorOnly` 注释精确化：语义是「本包不可达」（无可直连栅格路径），
+  而非「仅厂商私有」——仅声明 IPP+PDF 的设备同样归此类。
+
 ### 0.4.0 — Document Pipeline
 
 核心目标：**让 `ipp_print` 自己决定「怎么打印」。**
@@ -91,6 +109,9 @@ Mopria 官方数据（2026-09 核验）：超过 1.2 亿台认证打印机、10,
   URF 不属于 IPP Everywhere（Apple 体系）。
 - [ ] PWG encoder 抽象为 `DocumentEncoder` 体系成员（现实现按规范金标锚定，只抽象不重写）。
 - [ ] `printPdf()` 保留为便利 API；底层通用 `print(document, ticket)`。
+- [ ] 能力模型升级（外部复核采纳项）：`enum PrinterCapability`（4 值）
+  → 结构化能力集（protocol/document/coverage 维度），路由从「设备属于
+  哪一类」改为「具备哪些能力」——仅声明 IPP+PDF 的设备不应被整包拒绝。
 
 ### 0.5.0 — Print Ticket & Validation
 

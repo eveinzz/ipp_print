@@ -53,11 +53,17 @@ List<int> _i32(int v) => [
 
 void main() {
   test('Print-Job 请求金标：与独立参照实现逐字节一致', () {
-    const options = PrintOptions();
+    // 金标锚定「全属性下发」路径（0.3.2 起 PrintOptions() 默认全 null
+    // = 全不下发；显式构造才产生 job template 属性）。
+    const options = PrintOptions(
+      media: 'iso_a4_210x297mm',
+      duplex: 'one-sided',
+    );
     final actual = IppCodec.buildPrintJob(
       printerUri: 'ipp://EPSONBCAA32.local:631/ipp/print',
       documentFormat: 'image/pwg-raster',
       requestId: 7,
+      options: options,
     );
 
     final r = RefWriter();
@@ -96,6 +102,19 @@ void main() {
     expect(s.contains('media'), isFalse);
     expect(s.contains('sides'), isFalse);
     // copies 恒下发（份数是必选语义，无「打印机默认」概念）
+    expect(s.contains('copies'), isTrue);
+  });
+
+  test('Print-Job：默认构造（全 null）只下发 copies（0.3.2 回归锚点）', () {
+    final plain = IppCodec.buildPrintJob(
+      printerUri: 'ipp://p.local:631/ipp/print',
+      documentFormat: 'image/pwg-raster',
+      requestId: 4,
+    );
+    final s = String.fromCharCodes(plain);
+    expect(s.contains('media'), isFalse);
+    expect(s.contains('sides'), isFalse);
+    expect(s.contains('print-color-mode'), isFalse);
     expect(s.contains('copies'), isTrue);
   });
 
@@ -207,11 +226,15 @@ void main() {
 
   test('Validate-Job 请求金标：操作码 0x0004、无文档数据、与 Print-Job 同构',
       () {
-    const options = PrintOptions();
+    const options = PrintOptions(
+      media: 'iso_a4_210x297mm',
+      duplex: 'one-sided',
+    );
     final actual = IppCodec.buildValidateJob(
       printerUri: 'ipp://EPSONBCAA32.local:631/ipp/print',
       documentFormat: 'image/pwg-raster',
       requestId: 9,
+      options: options,
     );
 
     final r = RefWriter();

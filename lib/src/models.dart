@@ -15,7 +15,10 @@ enum PrinterCapability {
   /// 无 AirPrint 但声明 image/pwg-raster：可走本包 IPP 直连。
   ippDirect,
 
-  /// 仅厂商私有格式（如 application/vnd.epson.escpr）：本包不传输。
+  /// 无可直连的栅格路径：pdl 非空但不含 image/pwg-raster（厂商私有
+  /// 格式如 application/vnd.epson.escpr，或仅声明 PDF/JPEG 等非栅格
+  /// 格式）。本包当前仅传输 PWG 栅格，此类设备不可直连——注意语义
+  /// 是「本包不可达」而非「仅厂商私有」（TODO 0.4 能力图方向）。
   vendorOnly,
 
   /// 广播缺少可判定字段。
@@ -307,9 +310,9 @@ class PrintValidationResult {
 class PrintOptions {
   const PrintOptions({
     this.copies = 1,
-    this.media = 'iso_a4_210x297mm',
+    this.media,
     this.colorMode,
-    this.duplex = 'one-sided',
+    this.duplex,
   });
 
   /// 打印份数（job 属性 `copies`，integer）。
@@ -318,7 +321,7 @@ class PrintOptions {
   /// PWG 介质自描述名（job 属性 `media`）。
   ///
   /// 取值应来自 [PrinterInfo.mediaSupported]（打印机声明为准确），
-  /// 否则打印机可能拒绝；null = 不下发，打印机使用自己的
+  /// 否则打印机可能拒绝；null（默认）= 不下发，打印机使用自己的
   /// `media-default`。
   final String? media;
 

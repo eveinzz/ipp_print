@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] — 2026-09-11
+
+### Fixed
+
+- **Version sync**: iOS/macOS podspecs were still at `0.2.0` while pubspec
+  and CHANGELOG said `0.3.x` — both podspecs now track the package version.
+
+### Changed
+
+- **BREAKING** `PrintOptions`: `media` and `duplex` no longer default to
+  `iso_a4_210x297mm` / `one-sided` (which were silently sent to the printer);
+  they now default to `null` = attribute omitted, printer applies its own
+  `media-default` / `sides-default` — same semantics `colorMode` already had
+  since 0.3.0. Pass explicit values to keep the previous behavior.
+- **probe() honesty tightening**: a response whose
+  `document-format-supported` is missing (empty set) now downgrades to
+  `unsupported` instead of being treated as PWG-raster-capable — "not
+  declared" ≠ "supported"; the attribute is RFC 8011 REQUIRED for printers,
+  an empty set means non-conformant and is never inferred around.
+
 ## [0.3.1] — 2026-09-11
 
 ### Added

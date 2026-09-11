@@ -143,8 +143,8 @@ guess one.
 | Field | Default | IPP job attribute | Notes |
 |---|---|---|---|
 | `copies` | `1` | `copies` | integer (always sent; there is no "printer default" for copies) |
-| `media` | `iso_a4_210x297mm` | `media` | PWG name; should come from the printer's `media-supported` (`null` = omitted → `media-default`) |
-| `duplex` | `one-sided` | `sides` | `one-sided` / `two-sided-long-edge` / `two-sided-short-edge`; should be a member of `sides-supported` (`null` = omitted → `sides-default`) |
+| `media` | `null` | `media` | PWG name; should come from the printer's `media-supported` (`null` = omitted → `media-default`) |
+| `duplex` | `null` | `sides` | `one-sided` / `two-sided-long-edge` / `two-sided-short-edge`; should be a member of `sides-supported` (`null` = omitted → `sides-default`) |
 | `colorMode` | `null` | `print-color-mode` | `null` = attribute omitted → the printer applies its own `print-color-mode-default` per RFC 8011 (typically `auto`). Explicit values (`color` / `monochrome`, …) are sent as-is and should be a member of the printer's `print-color-mode-supported` (full value set: PWG 5107.3 §6.2.27). |
 
 ### Capability negotiation (host UI data source)

@@ -38,6 +38,9 @@ class IppPrint {
   ///
   /// 交叉验证规则（双源确定性）：TXT 判为 ippDirect 但 IPP 声明的
   /// document-format-supported 不含 image/pwg-raster → 降级 unsupported。
+  /// **缺失（空集）同样降级**——「没有声明能力」≠「支持能力」
+  /// （document-format-supported 是 RFC 8011 REQUIRED 打印机描述属性，
+  /// 声明集为空即非 conformant 打印机，按未声明处理绝不推断）。
   Future<PrinterProbeStatus> probe(
     DiscoveredPrinter printer, {
     void Function(PrinterInfo info)? onInfo,
@@ -60,8 +63,8 @@ class IppPrint {
           .getPrinterAttributes(printer)
           .timeout(const Duration(seconds: 10));
       final formats = attrs.documentFormats;
-      final ok = formats.isEmpty ||
-          formats.any((f) => f.toLowerCase().contains('pwg-raster'));
+      final ok = formats
+          .any((f) => f.toLowerCase().contains('pwg-raster'));
       ippProbeLog('probe ${printer.name}: $ok formats=$formats');
       final info = PrinterInfo(
         capability: ok ? PrinterCapability.ippDirect : PrinterCapability.vendorOnly,

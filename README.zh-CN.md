@@ -142,8 +142,8 @@ if (status == PrinterProbeStatus.ready) {
 | 字段 | 默认值 | 对应 IPP 作业属性 | 说明 |
 |---|---|---|---|
 | `copies` | `1` | `copies` | 份数（恒下发；份数无「打印机默认」语义） |
-| `media` | `iso_a4_210x297mm` | `media` | PWG 介质名；应取自打印机 `media-supported`（`null` = 不下发，用 `media-default`） |
-| `duplex` | `one-sided` | `sides` | `one-sided` / `two-sided-long-edge` / `two-sided-short-edge`；取值应为 `sides-supported` 的成员（`null` = 不下发，用 `sides-default`） |
+| `media` | `null` | `media` | PWG 介质名；应取自打印机 `media-supported`（`null` = 不下发，用 `media-default`） |
+| `duplex` | `null` | `sides` | `one-sided` / `two-sided-long-edge` / `two-sided-short-edge`；取值应为 `sides-supported` 的成员（`null` = 不下发，用 `sides-default`） |
 | `colorMode` | `null` | `print-color-mode` | `null` = 不下发 → 打印机用 `print-color-mode-default`（典型为 `auto`）。显式指定（`color` / `monochrome` 等）则原样下发，取值应为打印机 `print-color-mode-supported` 的成员（全集见 PWG 5107.3 §6.2.27）。 |
 
 ### 能力协商（宿主 UI 数据源）
