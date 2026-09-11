@@ -56,12 +56,18 @@ Future<void> main() async {
     print('${p.name}: $capability (${p.ippUriString})');
   }
 
-  // 2. Probe the chosen printer for negotiated capabilities.
+  // 2. Or add a manual endpoint when discovery fails (mDNS blocked,
+  //    cross-subnet, known address). The URI itself is the user's assertion
+  //    that an IPP endpoint exists; capability is still decided by probe /
+  //    print via live queries.
+  // final manual = ipp.addEndpoint(Uri.parse('ipp://192.168.1.50:631/ipp/print'));
+
+  // 3. Probe the chosen printer for negotiated capabilities.
   final printer = printers.first;
   final status = await ipp.probe(printer);
   print('probe: $status');
 
-  // 3. Print a PDF via IPP direct connection (ippDirect only).
+  // 4. Print a PDF via IPP direct connection (ippDirect only).
   if (status == PrinterProbeStatus.ready) {
     final pdfBytes = await loadPdf();
     await for (final progress in ipp.printPdf(

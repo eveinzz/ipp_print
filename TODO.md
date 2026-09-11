@@ -200,12 +200,14 @@ job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收�
 
 核心目标：**补最后一个入口缺口，然后停止抽象。**
 
-- [ ] `addEndpoint(Uri)` 手动连接（发现不到 ≠ 不能打印；绕过 TXT 分类门的
+- [x] `addEndpoint(Uri)` 手动连接（发现不到 ≠ 不能打印；绕过 TXT 分类门的
   probe 驱动能力路径）——zitie 真实场景（mDNS 失效网络）与 Universal
-  Print App 兜底共用。
-- [ ] 开源发布就绪清单：LICENSE 核验 / example app / 双 README 终审 /
-  发布决策（移除 `publish_to: none`）。
-- [ ] **⛔ CORE FREEZE 条款（随 0.7.0 生效）**：
+  Print App 兜底共用。**manual 不放松 ready 判据**（仅声明 pdf 仍如实
+  unsupported，判据豁免仅限 TXT 分类否定门——测试锚点已固化）。
+- [x] 开源发布就绪清单：LICENSE（MIT， eveinzz）/ example（含 addEndpoint
+  展示）/ 双 README 终审（特性清单 + Roadmap 封板状态）/
+  发布决策（**保留 `publish_to: none`**，pub.dev 发布待作者另行拍板）。
+- [x] **⛔ CORE FREEZE 条款（随 0.7.0 生效）**：
   - Contract v2 = Printer / PrinterCapabilities / PrintDocument /
     DocumentRoute / PrintTicket / PrintValidationResult / PrintJob；
   - 0.7.x 只允许：修 BUG、协议正确性、兼容性、性能、测试、平台适配；

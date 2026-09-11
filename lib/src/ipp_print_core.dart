@@ -44,6 +44,60 @@ class IppPrint {
   }) =>
       _discovery.discover(timeout: timeout);
 
+  /// 手动直连端点（0.7）：发现不到 ≠ 不能打印。
+  ///
+  /// 适用 mDNS 被网络策略屏蔽 / 跨网段 / 已知地址直连的场景。URI 本身即
+  /// IPP endpoint 存在性的用户断言——[probe] 与 [print]/[submit] 的 TXT
+  /// 分类否定门对该端点豁免，能力判定交给实时查询 + 协商器终审
+  /// （probe 驱动：先 [probe] 得 ready/unsupported/offline，再打印）。
+  ///
+  /// 解析规则（诚实解析，不猜）：
+  /// - scheme 白名单 ipp / ipps / http / https，其余抛 [IppPrintException]；
+  /// - `secure` = ipps/https（传输加密）；逻辑 scheme 恒 ipp/ipps；
+  /// - 缺省端口：ipp/ipps = 631（RFC 2910/7472 IPP 标准端口）、
+  ///   http/https = 80/443（HTTP 标准）；显式端口原样采用；
+  /// - 空路径 → `/`（根端点合法，可达性交协商器裁决）；
+  /// - 带 query/fragment 或缺 host → 拒绝（端点语义有歧义，不猜）。
+  ///
+  /// [name] 为宿主侧显示名，缺省 `Manual · host:port`；返回的
+  /// [DiscoveredPrinter] 与发现产物同构（可进 probe/print/submit/monitor）。
+  DiscoveredPrinter addEndpoint(Uri uri, {String? name}) {
+    const transportSchemes = {'ipp': false, 'ipps': true,
+      'http': false, 'https': true};
+    final scheme = uri.scheme.toLowerCase();
+    if (!transportSchemes.containsKey(scheme)) {
+      throw IppPrintException(
+          'addEndpoint: unsupported scheme "$scheme" '
+          '(expected ipp / ipps / http / https)');
+    }
+    if (uri.host.isEmpty) {
+      throw const IppPrintException(
+          'addEndpoint: URI has no host (e.g. ipp://192.168.1.50:631/ipp/print)');
+    }
+    if (uri.query.isNotEmpty || uri.fragment.isNotEmpty) {
+      throw const IppPrintException(
+          'addEndpoint: query/fragment are not part of an IPP endpoint URI');
+    }
+    final secure = transportSchemes[scheme]!;
+    final port = uri.port != 0
+        ? uri.port
+        : switch (scheme) {
+            'http' => 80,
+            'https' => 443,
+            _ => 631, // ipp / ipps：RFC 2910/7472 IPP 标准端口
+          };
+    final path = uri.path.isEmpty ? '/' : uri.path;
+    final host = uri.host;
+    return DiscoveredPrinter(
+      name: name ?? 'Manual · $host:$port',
+      host: host,
+      port: port,
+      resourcePath: path,
+      secure: secure,
+      manualEndpoint: true,
+    );
+  }
+
   /// 探测单台打印机：TXT 分类 + IPP 查询交叉验证，映射为状态机。
   ///
   /// 交叉验证规则（双源确定性，0.5 起事实驱动）：TXT 判 ippDirect /
@@ -54,12 +108,15 @@ class IppPrint {
   /// （document-format-supported 是 RFC 8011 REQUIRED 打印机描述属性，
   /// 声明集为空即非 conformant 打印机，按未声明处理绝不推断）。
   /// airPrint 级保持免查询快路径（宿主应交还系统打印面板）。
+  /// 0.7：manualEndpoint（[addEndpoint]）豁免 unknown 否定门——
+  /// 端点存在性由用户断言，一律走下方实时查询。
   Future<PrinterProbeStatus> probe(
     DiscoveredPrinter printer, {
     void Function(PrinterInfo info)? onInfo,
   }) async {
     final txtCapability = CapabilityClassifier.classify(printer.txt);
-    if (txtCapability == PrinterCapability.unknown) {
+    if (!printer.manualEndpoint &&
+        txtCapability == PrinterCapability.unknown) {
       return PrinterProbeStatus.unsupported;
     }
     if (txtCapability == PrinterCapability.airPrint) {

@@ -93,6 +93,13 @@ final printerPdf = resp(0, 0x04, [
   ...kw('document-format-supported', 'application/pdf'),
 ]);
 
+/// 声明集含 image/pwg-raster（+pdf）的打印机——probe ready 判据
+/// （0.5 裁决：document-format-supported 须含 pwg-raster 才可栅格回退）。
+final printerPwgPdf = resp(0, 0x04, [
+  ...kw('document-format-supported', 'image/pwg-raster'),
+  ...kwMore('application/pdf'),
+]);
+
 /// Print-Job 应答：job-id=42，processing，reason=job-incoming。
 final jobSubmitted = resp(0, 0x02, [
   ...intAttr('job-id', 42),

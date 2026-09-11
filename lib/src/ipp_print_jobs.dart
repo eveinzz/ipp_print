@@ -44,8 +44,12 @@ Stream<Object> _prepareSubmission(
   // 连 IPP endpoint 存在性都无法确认，拒绝且不发任何请求。
   // 修复（TODO 0.4 遗留）：仅声明 IPP+PDF 的设备（原 vendorOnly）
   // 不再被整包拒绝——PDF 直投经协商器天然可达。
-  if (CapabilityClassifier.classify(printer.txt) ==
-      PrinterCapability.unknown) {
+  // 0.7 豁免：manualEndpoint（addEndpoint 手动直连）——URI 本身即
+  // endpoint 存在性的用户断言，TXT 门对其无意义；能力终审仍在下方
+  // 实时查询 + 协商器。豁免仅对 manual 生效，发现打印机不放松。
+  if (!printer.manualEndpoint &&
+      CapabilityClassifier.classify(printer.txt) ==
+          PrinterCapability.unknown) {
     throw const IppUnsupportedException(
         'TXT record shows no IPP evidence (no rp/pdl/urf) — see probe()');
   }

@@ -44,6 +44,7 @@ Printing itself (IPP over HTTP/TLS) is pure Dart and identical on every platform
 - **Capability engine** — `inspect()` returns `PrinterCapabilities`: 24 standard attributes (identity, state + reasons, accepting-jobs, document formats, media, color, duplex, resolutions, copies range, finishings, IPP versions, operations, URI security), parsed **leniently from deterministic printer self-report** (RFC 8011 §6.2) — a missing attribute means unsupported, never inferred. New syntax decoders: resolution (§5.1.14), rangeOfInteger (§5.1.15), boolean (§5.1.12).
 - **Validate-Job preflight** — `validateJob()` asks the printer "can you print this job?" (operation 0x0004, no document data) and returns a structured `PrintValidationResult` including the Unsupported Attributes group (tag 0x05), so multi-megabyte documents are only submitted after an explicit go-ahead.
 - **Job Engine** — split `submit()` / `monitor()` / `getJob()` / `cancel()` responsibilities (0.6): submitting returns an immutable `PrintJob` snapshot (job-state seven values + job-level `job-state-reasons`), `monitor()` polls as a state stream until a terminal state with bounded transient-fault absorption; `print()` progress streams stay fully backward compatible, both sharing one gate→negotiate→encode source.
+- **Manual endpoint** — `addEndpoint(Uri)` (0.7): undiscovered ≠ unprintable. For networks where mDNS is blocked, cross-subnet, or known-address scenarios; the URI itself is the user's assertion that an IPP endpoint exists, while capability is still decided by live queries + the negotiator (probe-driven). Honest parsing: scheme whitelist, standard default ports, ambiguous URIs rejected.
 - **TLS transport** — printers advertising only `_ipps._tcp` are directly printable (`https://` endpoint, self-signed certificates accepted by default).
 - **PWG-raster encoder** (PWG 5102.4): 1796-octet `cups_page_header2_t` page header, file-level `RaS2` sync word (once per document), row groups (1-octet row repeat count, 1–256 rows) with pixel-granularity PackBits-like run-length encoding (sRGB-8, bpp=3) — validated byte-for-byte against the spec's §4.4.2 sample bitmap and CUPS `raster-stream.c`. Real-printer verified (EPSON L3250, end-to-end paper output).
 - **Pure Dart, zero Flutter dependencies** — the protocol core is unit-testable offline; PDF rasterization is injected through the `PdfRasterizer` port (e.g. backed by `printing`'s `rasterPdf`).
@@ -277,9 +278,11 @@ They are complementary. `printing` renders PDFs and drives the system print pane
 
 ## Roadmap
 
-Planned work (TLS transport, job management, capability negotiation, …) is
-tracked in [TODO.md](TODO.md); released changes are recorded in
-[CHANGELOG.md](CHANGELOG.md).
+**CORE FREEZE since 0.7.0** — the kernel contract (Contract v2) is frozen;
+0.7.x accepts only bug fixes, protocol correctness, compatibility, performance,
+tests, and platform adaptations. Future enhancements (streaming discovery,
+diagnostics) are additive-only candidates tracked in [TODO.md](TODO.md);
+released changes are recorded in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

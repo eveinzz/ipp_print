@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] — 2026-09-11
+
+Access & CORE FREEZE：补最后一个入口缺口（手动直连），内核封板。
+
+### Added
+
+- **`IppPrint.addEndpoint(Uri)`** 手动直连端点（发现不到 ≠ 不能打印）：
+  mDNS 被屏蔽 / 跨网段 / 已知地址场景。URI 本身即 IPP endpoint 存在性的
+  用户断言——`probe` / `print` / `submit` 的 TXT 分类否定门对该端点豁免，
+  能力判定仍交实时查询 + 协商器终审（probe 驱动，manual 不放松 ready 判据）。
+  解析诚实：scheme 白名单 ipp/ipps/http/https；缺省端口按 RFC 2910/7472
+  （ipp/ipps = 631）与 HTTP 标准（80/443）；空路径 → `/`；带 query/fragment
+  或缺 host → 拒绝（端点语义有歧义，不猜）。
+- `DiscoveredPrinter.manualEndpoint` 标志位（发现产物恒 false，豁免不外溢）。
+- example 补 addEndpoint 用法展示。
+
+### Notes
+
+- **⛔ CORE FREEZE 条款随本版生效**：Contract v2 = Printer /
+  PrinterCapabilities / PrintDocument / DocumentRoute / PrintTicket /
+  PrintValidationResult / PrintJob；0.7.x 只允许修 BUG、协议正确性、兼容性、
+  性能、测试、平台适配；新 API 准入唯一标准 = IPP 内核本身缺失的协议/设备
+  能力，上层 UI/产品需求永不构成准入理由。流式发现 / Diagnostics /
+  NWBrowser / NsdManager 移入 0.8.x+ 候选（additive-only，永不阻塞上层）。
+- 发布决策保留 `publish_to: none`：GitHub 开源已就绪（MIT LICENSE + example
+  + 双 README），pub.dev 发布待作者另行拍板。
+
 ## [0.6.0] — 2026-09-11
 
 Job Engine：作业语义成为内核契约；submit / monitor / cancel 职责拆分。

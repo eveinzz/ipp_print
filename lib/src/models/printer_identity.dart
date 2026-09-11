@@ -42,6 +42,7 @@ class DiscoveredPrinter {
     required this.resourcePath,
     this.uuid,
     this.secure = false,
+    this.manualEndpoint = false,
     Map<String, String>? txt,
   })  : txt = Map.unmodifiable(txt ?? const <String, String>{}),
         assert(resourcePath.startsWith('/'), 'resourcePath must start with /');
@@ -63,6 +64,13 @@ class DiscoveredPrinter {
 
   /// 原始 TXT 键值（小写键，值原样）。
   final Map<String, String> txt;
+
+  /// 是否为手动直连端点（0.7 [addEndpoint] 产出；发现层恒为 false）。
+  ///
+  /// 语义：URI 本身即 IPP endpoint 存在性的**用户断言**——TXT 分类门
+  /// （unknown 否定）对其豁免，能力判定交给 probe / print 的实时查询 +
+  /// 协商器终审（probe 驱动）。豁免仅此一处，不外溢到发现打印机。
+  final bool manualEndpoint;
 
   /// 传输是否加密（该实例来自 `_ipps._tcp` 广播）。
   ///
