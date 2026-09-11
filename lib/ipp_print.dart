@@ -4,6 +4,9 @@
 library;
 
 export 'src/capability/capability.dart';
+export 'src/document/document_encoder.dart';
+export 'src/document/document_format_negotiator.dart';
+export 'src/document/print_document.dart';
 export 'src/discovery/mdns_discovery.dart';
 export 'src/discovery/native_bonjour_discovery.dart';
 export 'src/ipp/ipp_client.dart';

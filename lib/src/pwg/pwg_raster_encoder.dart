@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:meta/meta.dart';
 
+import '../document/document_encoder.dart';
 import '../models.dart';
 
 /// PWG-raster（PWG 5102.4）页编码器。
@@ -18,11 +19,15 @@ import '../models.dart';
 ///
 /// 同步字 "RaS2" 为**文件级**（规范 Figure 1：sync + N 页），只在文档
 /// 开头出现一次——由调用方（printPdf）写入，[encodePage] 不含。
-class PwgRasterEncoder {
+class PwgRasterEncoder implements DocumentEncoder {
   const PwgRasterEncoder({this.dpi = 300});
 
   /// PoC 固定 300dpi（见 README 边界 4）。
   final int dpi;
+
+  /// 本编码器产出的目标 IPP document-format（DocumentEncoder 体系）。
+  @override
+  String get documentFormat => 'image/pwg-raster';
 
   /// "RaS2" = PWG Raster v2 同步字（文件级，仅出现一次）。
   static const int magic = 0x52615332;

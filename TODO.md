@@ -97,18 +97,26 @@ Mopria 官方数据（2026-09 核验）：超过 1.2 亿台认证打印机、10,
 - [x] `vendorOnly` 注释精确化：语义是「本包不可达」（无可直连栅格路径），
   而非「仅厂商私有」——仅声明 IPP+PDF 的设备同样归此类。
 
-### 0.4.0 — Document Pipeline
+### 0.4.0 — Document Pipeline（骨架已交付 2026-09-11，进行中）
 
 核心目标：**让 `ipp_print` 自己决定「怎么打印」。**
 
-- [ ] `PrintDocument`（bytes + mimeType）与 `DocumentFormatNegotiator`：
-  读 `document-format-supported` → 选择最优格式 → 必要时转换 → 提交。
+- [x] **models.dart 拆分**（406 行越线 → models/ 四域文件 + barrel，
+  最长 209 行；全量回归零破坏）。
+- [x] `PrintDocument`（bytes + mimeType + 可选 name）与
+  `DocumentFormatNegotiator`（无状态纯函数）：声明集含文档 MIME →
+  **直投原格式**（免栅格化，保矢量）；否则含 `image/pwg-raster` →
+  转 PWG 栅格；否则抛异常——**缺≠支持，绝不推断**。
+  真机锚点：L3250 声明集 `[octet-stream, pwg-raster, escpr]` 不含
+  PDF（2026-09-11 inspect），PDF 文档必走栅格回退路径（测试锚定）。
+- [x] `DocumentEncoder` 抽象 + `PwgRasterEncoder` 挂入体系
+  （只抽象不重写，规范金标测试原样保留）。
 - [ ] 文档格式事实基线（IPP Everywhere v1.1 §6 一手条款）：
   PWG Raster = MUST（全机型）；JPEG = 彩色机 MUST / 单色机 SHOULD；
   **PDF = 仅 SHOULD**——PDF 直投必须机会主义（运行时查证，L3250 未实测）；
   URF 不属于 IPP Everywhere（Apple 体系）。
-- [ ] PWG encoder 抽象为 `DocumentEncoder` 体系成员（现实现按规范金标锚定，只抽象不重写）。
-- [ ] `printPdf()` 保留为便利 API；底层通用 `print(document, ticket)`。
+- [ ] 底层通用 `print(document, …)` 集成协商器与编码器；
+  `printPdf()` 保留为便利 API。
 - [ ] 能力模型升级（外部复核采纳项）：`enum PrinterCapability`（4 值）
   → 结构化能力集（protocol/document/coverage 维度），路由从「设备属于
   哪一类」改为「具备哪些能力」——仅声明 IPP+PDF 的设备不应被整包拒绝。
