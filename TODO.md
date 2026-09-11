@@ -153,24 +153,63 @@ job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收�
   不支持值）；PrintTicket 应含 fidelity/strictness 维度
   （L3250 jobCreationAttrs 确声明 ipp-attribute-fidelity 可提交）。
 
-### 0.5.0 — Print Ticket & Validation
+### 0.5.0 — Print Core Foundation（契约冻结 v1）
 
-- [ ] `PrintTicket` 显式建模（media/colorMode/sides/resolution/copies）+
-  能力校验器：ticket 值 ∉ capabilities → 结构化 `PrintValidationResult`
-  而非异常。`PrintOptions` 默认值语义退役（A4 默认不再成立）。
+核心目标：**定义上层可长期依赖的打印语义层。**（0.4.1 归档的 Gate 冲突在本版解决）
+
+- [ ] Capability Gate 重构：`enum PrinterCapability` 分类门 → 事实驱动能力集
+  （IPP Endpoint 实测能力优先，TXT 分类降为兼容层）——仅声明 IPP+PDF
+  的设备不再被整包拒绝。
+- [ ] `PrintTicket` 显式建模（media/colorMode/sides/resolution/copies +
+  fidelity 维度，见 0.4.1 注记）；`PrintOptions` 保留为便利/兼容层。
+- [ ] `CapabilityValidator` 本地预检：ticket 值 ∉ capabilities → 结构化
+  `PrintValidationResult`，与 Validate-Job（设备级终审）双层并存。
+- [ ] `DocumentRoute` 类型化：协商器决策（直投/栅格回退/拒绝）显式化为契约出参。
+- [ ] Structured Error 分类轴：现有 3 类异常（IppPrint/IppStatus/IppJobTimeout）
+  上扩 network/validation/unsupported 维度——复用不推翻。
+- [ ] Typed IPP Value 基础层：integer/boolean/keyword/name/text/uri/
+  resolution/rangeOfInteger 上收为类型层（inspect 定制解码迁入）。
+- P1（不阻塞冻结）：dateTime(0x31)/collection(0x34) 解码——等真实机型
+  media-col 需求触发（L3250 级 keyword 介质表已够）。
 
 ### 0.6.0 — Job Engine
 
-- [ ] `Print-Job` / `Create-Job` + `Send-Document`（多文档）/ `Get-Job-Attributes`
-  / `Get-Jobs` / `Cancel-Job` 统一为 `PrintJob` 对象模型（8 态 lifecycle）。
-- [ ] `job-state-reasons` 透传（`media-jam` ≠ `printer-stopped`，产品语义必需）。
+核心目标：**作业语义成为内核契约。**
 
-### 0.7.0 — Discovery Engine
+- [ ] `PrintJob` 对象模型（8 态 lifecycle）：状态/进度/取消统一出口；
+  `print()` 进度流（PrintStage）保持向后兼容。
+- [ ] `job-state-reasons` 作业级透传（`media-jam` ≠ `printer-stopped`，
+  上层错误页语义必需；printer 级已由 inspect 透出）。
+- [ ] submit / monitor / cancel 职责拆分 + `Get-Jobs` 作业查询。
+- [ ] `Create-Job` + `Send-Document` 多文档（opportunistic：L3250 声明
+  op 5/6，但无上层场景牵引——做成即测，不做不阻塞）。
+
+### 0.7.0 — Access & CORE FREEZE（内核封板）
+
+核心目标：**补最后一个入口缺口，然后停止抽象。**
+
+- [ ] `addEndpoint(Uri)` 手动连接（发现不到 ≠ 不能打印；绕过 TXT 分类门的
+  probe 驱动能力路径）——zitie 真实场景（mDNS 失效网络）与 Universal
+  Print App 兜底共用。
+- [ ] 开源发布就绪清单：LICENSE 核验 / example app / 双 README 终审 /
+  发布决策（移除 `publish_to: none`）。
+- [ ] **⛔ CORE FREEZE 条款（随 0.7.0 生效）**：
+  - Contract v2 = Printer / PrinterCapabilities / PrintDocument /
+    DocumentRoute / PrintTicket / PrintValidationResult / PrintJob；
+  - 0.7.x 只允许：修 BUG、协议正确性、兼容性、性能、测试、平台适配；
+  - 新 API 准入唯一标准：**IPP 内核本身缺失的协议/设备能力**——
+    上层 UI/产品需求永不构成准入理由；
+  - 流式发现、Diagnostics、NWBrowser/NsdManager 迁移（双触发条件保留）
+    全部移入 0.8.x+ 候选，additive-only 演进，永不阻塞上层。
+
+### 0.8.x+ — 候选增强（封板后，additive-only）
 
 - [ ] `Stream<PrinterDiscoveryEvent>` 流式发现（printerAdded/Updated/Removed；
-  iOS 侧先落 delegate 强持有模型——ARC 教训在长驻监听场景会放大）。
-- [ ] `addEndpoint(Uri)` 手动连接（发现不到 ≠ 不能打印；需绕过 TXT 分类门的
-  probe 驱动能力路径）。
+  iOS 侧 delegate 强持有模型——ARC 教训在长驻监听场景会放大）。
+- [ ] `IppPrint.diagnose()` → `DiagnosticReport`：Discovery/DNS-SD/Network/TLS/
+  IPP/Capability/Document 分层组合 + `IppDiagnosticCode` 枚举。
+  （降级理由：组合能力而非内核能力，上层可基于 0.7 契约自行拼装。）
+  原则：**DEBUG log 给开发者，DiagnosticReport 给产品**。仍然无 UI。
 - [ ] iOS/macOS → `NWBrowser` 迁移评估（**双触发条件保留**：Apple 公布正式弃用
   版本号（编译警告出现）或最低部署目标抬升决策落地。事实基线：
   `NSNetServiceBrowser` = 软弃用（`API_TO_BE_DEPRECATED`，无时间表）；
@@ -178,12 +217,7 @@ job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收�
 - [ ] Android 原生适配决策项：`NsdManager`（走系统服务、免 MulticastLock，
   同 Bonjour 豁免逻辑）替代「宿主自理 MulticastLock」——需新增 android/
   原生模块，属产品决策。
-
-### 0.8.0 — Diagnostics Engine
-
-- [ ] `IppPrint.diagnose()` → `DiagnosticReport`：Discovery/DNS-SD/Network/TLS/
-  IPP/Capability/Document 分层结果 + `IppDiagnosticCode` 枚举。
-  原则：**DEBUG log 给开发者，DiagnosticReport 给产品**。仍然无 UI。
+- [ ] Typed Value collection 深化（`media-col-database` 等，真实机型触发时）。
 
 ---
 
