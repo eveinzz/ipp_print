@@ -43,6 +43,8 @@ class IppCodec {
   // Print-Job 0x0002 起、Validate-Job 0x0004、Cancel-Job 0x0008、
   // Get-Job-Attributes 0x0009、Get-Jobs 0x000A、Get-Printer-Attributes 0x000B）。
   static const int opPrintJob = 0x0002;
+  static const int opCreateJob = 0x0005;
+  static const int opSendDocument = 0x0006;
   static const int opValidateJob = 0x0004;
   static const int opCancelJob = 0x0008;
   static const int opGetJobAttributes = 0x0009;
@@ -67,34 +69,21 @@ class IppCodec {
       ..attr(tagCharset, 'attributes-charset', 'utf-8')
       ..attr(tagLanguage, 'attributes-natural-language', 'en')
       ..attr(tagUri, 'printer-uri', printerUri.toString())
-      ..attr(tagName, 'requesting-user-name', userName);
-    b
+      ..attr(tagName, 'requesting-user-name', userName)
       ..attr(tagName, 'job-name', jobName)
       ..attr(tagMime, 'document-format', documentFormat);
-    b.group(tagJobGroup).attr(tagInteger, 'copies', options.copies);
-    // media / print-color-mode / sides 统一语义：null = 不下发该属性，
-    // 打印机使用自己的 *-default（RFC 8011 §5.2 job template 默认值语义）。
-    // 宿主无法从打印机声明能力确定取值时应传 null，而不是猜一个值。
-    if (options.media != null) {
-      b.attr(tagKeyword, 'media', options.media!);
-    }
-    if (options.colorMode != null) {
-      b.attr(tagKeyword, 'print-color-mode', options.colorMode!);
-    }
-    if (options.duplex != null) {
-      b.attr(tagKeyword, 'sides', options.duplex!);
-    }
-    // 属性保真（RFC 8011 §5.2.2）：bestEffort → 不下发（打印机按默认
-    // false 处理）；exact → 显式 true（任一值不被支持则拒绝整个作业）。
+    // ipp-attribute-fidelity 是 **Operation Attribute**（RFC 8011 §4.2.1.1
+    // Group 1 定义；0.6 修复：原误写入 Group 2 job template 组）。
+    // bestEffort → 不下发（打印机按默认 false 处理）；exact → 显式 true
+    // （任一 job template 值不被支持则拒绝整个作业，§5.2.2）。
     if (options.fidelity != null) {
       b.attr(tagBoolean, 'ipp-attribute-fidelity',
           options.fidelity == PrintFidelity.exact);
     }
-    // 分辨率（RFC 8011 §5.1.14 resolution 线语法：cross+feed+unit 9 字节）。
-    final res = options.resolution;
-    if (res != null) {
-      b.attr(tagResolution, 'printer-resolution', res);
-    }
+    // Job template 属性（RFC 8011 §4.2.1.1 Group 2），与 Validate-Job /
+    // Create-Job 共用单一来源 `_writeJobTemplate`（0.6 防三处漂移）。
+    b.group(tagJobGroup);
+    _writeJobTemplate(b, options);
     return b.take();
   }
 
@@ -194,8 +183,22 @@ class IppCodec {
       ..attr(tagName, 'requesting-user-name', userName)
       ..attr(tagName, 'job-name', jobName)
       ..attr(tagMime, 'document-format', documentFormat);
-    b.group(tagJobGroup).attr(tagInteger, 'copies', options.copies);
-    // 与 Print-Job 相同的 null = 不下发语义（RFC 8011 §5.2 默认值语义）。
+    // 与 Print-Job 严格同构（§4.2.3）：fidelity 同为操作属性组。
+    if (options.fidelity != null) {
+      b.attr(tagBoolean, 'ipp-attribute-fidelity',
+          options.fidelity == PrintFidelity.exact);
+    }
+    b.group(tagJobGroup);
+    _writeJobTemplate(b, options);
+    return b.take();
+  }
+
+  /// Job Template 属性写入（Print-Job / Validate-Job / Create-Job 三处共用
+  /// 单一来源，0.6 防漂移）。RFC 8011 §4.2.1.1：job template 属性位于请求
+  /// **Group 2（Job Template Attributes）**。统一语义：null = 不下发该属性
+  /// （RFC 8011 §5.2 job template 默认值语义）。
+  static void _writeJobTemplate(_Builder b, PrintOptions options) {
+    b.attr(tagInteger, 'copies', options.copies);
     if (options.media != null) {
       b.attr(tagKeyword, 'media', options.media!);
     }
@@ -204,6 +207,57 @@ class IppCodec {
     }
     if (options.duplex != null) {
       b.attr(tagKeyword, 'sides', options.duplex!);
+    }
+    // 分辨率（RFC 8011 §5.1.14 resolution 线语法：cross+feed+unit 9 字节）。
+    final res = options.resolution;
+    if (res != null) {
+      b.attr(tagResolution, 'printer-resolution', res);
+    }
+  }
+
+  /// Create-Job（RFC 8011 §4.2.4，op 0x0005，RECOMMENDED）：无文档数据的
+  /// Job Creation，后续以 Send-Document 逐文档提交。§4.2.4 明确：
+  /// Client does not supply "document-format"/"compression"（每文档属性，
+  /// 由 Send-Document 按文档下发）；job template 属性仍随本请求提供。
+  static Uint8List buildCreateJob({
+    required String printerUri,
+    required int requestId,
+    String userName = 'ipp_print',
+    String jobName = 'ipp_print-document',
+    PrintOptions options = const PrintOptions(),
+  }) {
+    final b = _Builder(opCreateJob, requestId)
+      ..attr(tagCharset, 'attributes-charset', 'utf-8')
+      ..attr(tagLanguage, 'attributes-natural-language', 'en')
+      ..attr(tagUri, 'printer-uri', printerUri.toString())
+      ..attr(tagName, 'requesting-user-name', userName)
+      ..attr(tagName, 'job-name', jobName);
+    b.group(tagJobGroup);
+    _writeJobTemplate(b, options);
+    return b.take();
+  }
+
+  /// Send-Document（RFC 8011 §4.3.1，op 0x0006）：向既有作业追加文档。
+  /// §4.3.1.1：printer-uri + job-id REQUIRED；**last-document（boolean）
+  /// Client MUST supply**；document-format MAY 按文档提供；文档数据在
+  /// end-of-attributes 之后（Group 2: Document Data）。
+  static Uint8List buildSendDocument({
+    required String printerUri,
+    required int jobId,
+    required int requestId,
+    required bool lastDocument,
+    String? documentFormat,
+    String userName = 'ipp_print',
+  }) {
+    final b = _Builder(opSendDocument, requestId)
+      ..attr(tagCharset, 'attributes-charset', 'utf-8')
+      ..attr(tagLanguage, 'attributes-natural-language', 'en')
+      ..attr(tagUri, 'printer-uri', printerUri.toString())
+      ..attr(tagName, 'requesting-user-name', userName)
+      ..attr(tagInteger, 'job-id', jobId)
+      ..attr(tagBoolean, 'last-document', lastDocument);
+    if (documentFormat != null) {
+      b.attr(tagMime, 'document-format', documentFormat);
     }
     return b.take();
   }

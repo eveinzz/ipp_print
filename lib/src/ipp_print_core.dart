@@ -1,5 +1,5 @@
 import 'dart:async' show TimeoutException;
-import 'dart:io' show SocketException;
+import 'dart:io' show SocketException, HandshakeException;
 import 'dart:typed_data';
 
 import 'capability/capability.dart';
@@ -9,8 +9,11 @@ import 'document/document_format_negotiator.dart';
 import 'document/print_document.dart';
 import 'ipp/ipp_client.dart';
 import 'ipp/ipp_log.dart';
+import 'job/print_job.dart';
 import 'models.dart';
 import 'pwg/pwg_raster_encoder.dart';
+
+part 'ipp_print_jobs.dart';
 
 /// 诊断日志：仅 DEBUG 输出，前缀与原生层一致，release 零开销。
 /// （统一实现在 [ippLog]，本函数保留旧名以兼容既有调用方。）
@@ -30,6 +33,10 @@ class IppPrint {
   final IppClient _client;
   final int _dpi;
   final _encoder = const PwgRasterEncoder();
+
+  /// Job Engine（0.6）：submit / monitor / getJob / cancel 职责拆分的
+  /// 实现宿主（懒构造；实现见 ipp_print_jobs.dart part）。
+  late final _jobs = _JobEngine(this);
 
   /// 发现局域网打印机（全量平铺，含不可直连的机型）。
   Future<List<DiscoveredPrinter>> discover({
@@ -165,12 +172,15 @@ class IppPrint {
   /// 2. 否则声明集含 `image/pwg-raster` → 栅格回退：[rasterizer] 必须注入
   ///    且文档须为 PDF（现管线唯一栅格化路径；非 PDF 文档无对应编码器，
   ///    如实拒绝不假装能处理）；
-  /// 3. 否则抛 [IppPrintException]（缺≠支持，绝不推断）。
+  /// 3. 否则抛 [IppUnsupportedException]（缺≠支持，绝不推断）。
   ///
   /// `job-name` 取 [PrintDocument.name]，缺省 `ipp_print-document`。
   /// 能力查询限时 10s（同 [probe] 挂起防御），作业终态限时 [jobTimeout]。
   /// 进度流：直投 = sending → waitingPrinter → done（页数未知，如实不填）；
   /// 栅格回退 = rasterizing → encoding… → sending → waitingPrinter → done。
+  ///
+  /// 0.6 起 gate → 协商 → 编码整段与 [submit] 共用单一来源
+  /// `_prepareSubmission`（防双入口漂移）。
   Stream<PrintProgress> print({
     required PrintDocument document,
     required DiscoveredPrinter printer,
@@ -179,114 +189,83 @@ class IppPrint {
     Duration jobTimeout = const Duration(minutes: 5),
     int? dpi,
   }) async* {
-    final options = ticket.toOptions();
-    // Gate 事实化（0.5 重构）：TXT 分类不再是「本包可达」的终审——
-    // airPrint / ippDirect / vendorOnly 三类均有 IPP endpoint 证据
-    // （rp 由发现层保证非空），真正的把关交给下面的**实时能力查询 +
-    // 协商器**（声明集无交集 → IppUnsupportedException）。TXT 只保留
-    // 一个否定门：unknown = 广播缺可判定字段（无 rp/pdl/urf 证据），
-    // 连 IPP endpoint 存在性都无法确认，拒绝且不发任何请求。
-    // 修复（TODO 0.4 遗留）：仅声明 IPP+PDF 的设备（原 vendorOnly）
-    // 不再被整包拒绝——PDF 直投经协商器天然可达。
-    if (CapabilityClassifier.classify(printer.txt) ==
-        PrinterCapability.unknown) {
-      throw const IppUnsupportedException(
-          'TXT record shows no IPP evidence (no rp/pdl/urf) — see probe()');
-    }
-    // 声明集实时查询（协商数据源）。整机限时 10s，超时如实抛出。
-    final PrinterAttributes attrs;
-    try {
-      attrs = await _client
-          .getPrinterAttributes(printer)
-          .timeout(const Duration(seconds: 10));
-    } on TimeoutException {
-      ippProbeLog('print ${printer.name}: capability query TIMEOUT (10s)');
-      throw const IppPrintException(
-          'print: capability query timed out after 10s');
-    }
-    final decision = const DocumentFormatNegotiator().negotiate(
+    await for (final ev in _prepareSubmission(
+      _client,
+      encoder: _encoder,
+      defaultDpi: _dpi,
       document: document,
-      printerFormats: attrs.documentFormats,
-    );
-    if (!decision.passthrough) {
-      if (rasterizer == null) {
-        throw IppPrintException(
-            'printer does not declare ${document.mimeType} and no '
-            'rasterizer was provided for the PWG-raster fallback');
+      printer: printer,
+      ticket: ticket,
+      rasterizer: rasterizer,
+      dpi: dpi,
+    )) {
+      if (ev is PrintProgress) {
+        yield ev;
+        continue;
       }
-      if (document.mimeType.toLowerCase() != 'application/pdf') {
-        throw IppPrintException(
-            'no encoder for ${document.mimeType}: the current pipeline can '
-            'only rasterize application/pdf (printer declares: '
-            '${attrs.documentFormats})');
-      }
-      final encoder = dpi == null ? _encoder : PwgRasterEncoder(dpi: dpi);
-      yield const PrintProgress(PrintStage.rasterizing);
-      final pwg = BytesBuilder(copy: false);
-      // PWG 5102.4 Figure 1：同步字为文件级，整个文档只出现一次。
-      pwg.add(encoder.syncWordBytes);
-      var pageNo = 0;
-      await for (final page
-          in rasterizer.rasterize(document.bytes, dpi: dpi ?? _dpi)) {
-        pageNo++;
-        pwg.add(encoder.encodePage(page));
-        yield PrintProgress(PrintStage.encoding, page: pageNo);
-      }
-      if (pageNo == 0) {
-        throw const IppPrintException('rasterizer produced no pages');
-      }
+      final p = ev as _PreparedSubmission;
       yield* _submitAndAwait(
+        _client,
         printer,
-        bytes: pwg.takeBytes(),
-        documentFormat: decision.documentFormat,
-        options: options,
-        jobName: document.name ?? 'ipp_print-document',
+        bytes: p.bytes,
+        documentFormat: p.documentFormat,
+        options: p.options,
+        jobName: p.jobName,
         jobTimeout: jobTimeout,
-        pageCount: pageNo,
+        pageCount: p.pageCount,
       );
-      return;
     }
-    // 直投：文档字节原样提交（保矢量与文本层）。
-    yield* _submitAndAwait(
-      printer,
-      bytes: Uint8List.fromList(document.bytes),
-      documentFormat: decision.documentFormat,
-      options: options,
-      jobName: document.name ?? 'ipp_print-document',
-      jobTimeout: jobTimeout,
-    );
   }
 
-  /// 提交作业并等待终态（print() 的公共尾部）。
-  /// [pageCount] 仅栅格回退路径已知；直投路径如实为 null。
-  Stream<PrintProgress> _submitAndAwait(
-    DiscoveredPrinter printer, {
-    required Uint8List bytes,
-    required String documentFormat,
-    required PrintOptions options,
-    required String jobName,
-    required Duration jobTimeout,
-    int? pageCount,
-  }) async* {
-    yield const PrintProgress(PrintStage.sending);
-    final jobId = await _client.submitJob(
-      printer,
-      document: bytes,
-      documentFormat: documentFormat,
-      options: options,
-      jobName: jobName,
-    );
-    yield PrintProgress(PrintStage.waitingPrinter, jobId: jobId);
-    final state = await _client.waitForTerminalState(
-      printer,
-      jobId,
-      timeout: jobTimeout,
-    );
-    if (state != IppJobState.completed) {
-      throw IppPrintException('job $jobId ended as ${state.name}');
-    }
-    yield PrintProgress(PrintStage.done, pageCount: pageCount, jobId: jobId);
-  }
+  /// 提交作业但不等待终态（0.6 Job Engine）：gate → 实时协商 → 编码 →
+  /// Print-Job，返回含打印机应答快照（job-id / job-state /
+  /// job-state-reasons，RFC 8011 §4.2.1.2 REQUIRED）的 [PrintJob]。
+  /// 后续以 [monitor] 轮询状态、[cancel] 取消、[getJob] 单查。
+  ///
+  /// [onProgress] 可选接收栅格回退路径的 rasterizing/encoding 进度
+  /// （直投路径无编码进度；语义同 [print] 的前段事件流）。
+  /// 其余语义（门/协商/编码/限时）与 [print] 完全一致。
+  Future<PrintJob> submit({
+    required PrintDocument document,
+    required DiscoveredPrinter printer,
+    PdfRasterizer? rasterizer,
+    PrintTicket ticket = const PrintTicket(),
+    int? dpi,
+    void Function(PrintProgress progress)? onProgress,
+  }) =>
+      _jobs.submit(
+        document: document,
+        printer: printer,
+        rasterizer: rasterizer,
+        ticket: ticket,
+        dpi: dpi,
+        onProgress: onProgress,
+      );
+
+  /// 监听作业状态流（0.6 Job Engine）：按 [interval] 轮询
+  /// Get-Job-Attributes，产出 [PrintJob] 快照；终态快照产出后正常关流；
+  /// 超时抛 [IppJobTimeoutException]。瞬态故障（网络抖动 / HTTP 5xx /
+  /// TLS 握手抖动）在 [maxTransientErrors] 次内吸收（语义同
+  /// [IppClient.waitForTerminalState]）。
+  Stream<PrintJob> monitor(
+    PrintJob job, {
+    Duration interval = const Duration(seconds: 2),
+    Duration timeout = const Duration(minutes: 5),
+    int maxTransientErrors = 3,
+  }) =>
+      _jobs.monitor(
+        job,
+        interval: interval,
+        timeout: timeout,
+        maxTransientErrors: maxTransientErrors,
+      );
+
+  /// 单查作业快照（Get-Job-Attributes）。
+  Future<PrintJob> getJob(DiscoveredPrinter printer, int jobId) =>
+      _jobs.getJob(printer, jobId);
+
+  /// 取消作业（Cancel-Job；[PrintJob.printer] + [PrintJob.jobId] 寻址）。
+  Future<void> cancel(PrintJob job) => _jobs.cancel(job);
 
   /// PDF → 栅格 → PWG → IPP 直连打印（便利 API：等价于以
   /// `mimeType: 'application/pdf'` 调用 [print]）。

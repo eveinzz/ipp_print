@@ -177,17 +177,24 @@ job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收�
 - P1（不阻塞冻结）：dateTime(0x31)/collection(0x34) 解码——等真实机型
   media-col 需求触发（L3250 级 keyword 介质表已够）。
 
-### 0.6.0 — Job Engine
+### 0.6.0 — Job Engine（已交付，2026-09-11）
 
 核心目标：**作业语义成为内核契约。**
 
-- [ ] `PrintJob` 对象模型（8 态 lifecycle）：状态/进度/取消统一出口；
-  `print()` 进度流（PrintStage）保持向后兼容。
-- [ ] `job-state-reasons` 作业级透传（`media-jam` ≠ `printer-stopped`，
+- [x] `PrintJob` 对象模型（8 态 lifecycle）：状态/进度/取消统一出口；
+  `print()` 进度流（PrintStage）保持向后兼容（print 与 submit 共享
+  gate→协商→编码单一来源 `_prepareSubmission`，防双入口漂移）。
+- [x] `job-state-reasons` 作业级透传（`media-jam` ≠ `printer-stopped`，
   上层错误页语义必需；printer 级已由 inspect 透出）。
-- [ ] submit / monitor / cancel 职责拆分 + `Get-Jobs` 作业查询。
-- [ ] `Create-Job` + `Send-Document` 多文档（opportunistic：L3250 声明
-  op 5/6，但无上层场景牵引——做成即测，不做不阻塞）。
+- [x] submit / monitor / cancel 职责拆分 + `Get-Jobs` 作业查询
+  （getJobs 0.3 已有，本版补单作业 `getJob` 快照）。
+- [x] `Create-Job` + `Send-Document` 多文档（opportunistic：L3250 声明
+  op 5/6——本版做成即测：线格式 + client 端到端锚点，无 facade 多文档入口）。
+- 交付时一并修复（验收审计发现）：`ipp-attribute-fidelity` 组归属
+  （RFC 8011 §4.2.1.1 Group 1 操作属性，原误入 Group 2）；Validate-Job
+  同构性（补 fidelity/printer-resolution 镜像，job template 属性三处共用
+  `_writeJobTemplate`）；`submitJob` 返回升级 `IppJobSummary`
+  （§4.2.1.2 REQUIRED 三件套）；UA 版本串漂移 0.3→0.6。
 
 ### 0.7.0 — Access & CORE FREEZE（内核封板）
 

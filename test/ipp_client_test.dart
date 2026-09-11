@@ -239,13 +239,15 @@ void main() {
     expect(attrs.sidesDefault, 'one-sided');
   });
 
-  test('submitJob：返回打印机分配的 job-id，请求含文档数据', () async {
-    final jobId = await client.submitJob(
+  test('submitJob：返回作业快照（job-id），请求含文档数据', () async {
+    final summary = await client.submitJob(
       printer,
       document: Uint8List.fromList([1, 2, 3, 4]),
       documentFormat: 'image/pwg-raster',
     );
-    expect(jobId, 42);
+    expect(summary.jobId, 42);
+    // mock 响应带 job-state=3 → 如实映射 pending（RFC 8011 §4.2.1.2）。
+    expect(summary.jobState, IppJobState.pending);
     final req = server.requests.single;
     expect(req[2] << 8 | req[3], IppCodec.opPrintJob);
     // 请求尾部应包含我们提交的文档字节
@@ -254,14 +256,14 @@ void main() {
   });
 
   test('getJobState：轮询到 completed 终态', () async {
-    final jobId = await client.submitJob(
+    final summary = await client.submitJob(
       printer,
       document: Uint8List.fromList([9]),
       documentFormat: 'image/pwg-raster',
     );
     final state = await client.waitForTerminalState(
       printer,
-      jobId,
+      summary.jobId,
       interval: const Duration(milliseconds: 10),
     );
     expect(state, IppJobState.completed);

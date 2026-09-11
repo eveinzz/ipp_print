@@ -40,9 +40,10 @@ Printing itself (IPP over HTTP/TLS) is pure Dart and identical on every platform
   - `airPrint` — has URF; hand over to the OS print panel.
   - `ippDirect` — no URF but `pdl` contains `image/pwg-raster`; printable via this package.
   - `vendorOnly` — vendor-private formats only; guide the user to a vendor app.
-- **IPP 1.1 client** (RFC 8010 / RFC 8011): `Print-Job`, `Get-Printer-Attributes`, `Get-Job-Attributes`, `Get-Jobs`, `Cancel-Job`; job-state polling with transient-fault tolerance.
+- **IPP 1.1 client** (RFC 8010 / RFC 8011): `Print-Job`, `Create-Job` + `Send-Document` (multi-document), `Get-Printer-Attributes`, `Get-Job-Attributes`, `Get-Jobs`, `Cancel-Job`; job-state polling with transient-fault tolerance.
 - **Capability engine** — `inspect()` returns `PrinterCapabilities`: 24 standard attributes (identity, state + reasons, accepting-jobs, document formats, media, color, duplex, resolutions, copies range, finishings, IPP versions, operations, URI security), parsed **leniently from deterministic printer self-report** (RFC 8011 §6.2) — a missing attribute means unsupported, never inferred. New syntax decoders: resolution (§5.1.14), rangeOfInteger (§5.1.15), boolean (§5.1.12).
 - **Validate-Job preflight** — `validateJob()` asks the printer "can you print this job?" (operation 0x0004, no document data) and returns a structured `PrintValidationResult` including the Unsupported Attributes group (tag 0x05), so multi-megabyte documents are only submitted after an explicit go-ahead.
+- **Job Engine** — split `submit()` / `monitor()` / `getJob()` / `cancel()` responsibilities (0.6): submitting returns an immutable `PrintJob` snapshot (job-state seven values + job-level `job-state-reasons`), `monitor()` polls as a state stream until a terminal state with bounded transient-fault absorption; `print()` progress streams stay fully backward compatible, both sharing one gate→negotiate→encode source.
 - **TLS transport** — printers advertising only `_ipps._tcp` are directly printable (`https://` endpoint, self-signed certificates accepted by default).
 - **PWG-raster encoder** (PWG 5102.4): 1796-octet `cups_page_header2_t` page header, file-level `RaS2` sync word (once per document), row groups (1-octet row repeat count, 1–256 rows) with pixel-granularity PackBits-like run-length encoding (sRGB-8, bpp=3) — validated byte-for-byte against the spec's §4.4.2 sample bitmap and CUPS `raster-stream.c`. Real-printer verified (EPSON L3250, end-to-end paper output).
 - **Pure Dart, zero Flutter dependencies** — the protocol core is unit-testable offline; PDF rasterization is injected through the `PdfRasterizer` port (e.g. backed by `printing`'s `rasterPdf`).
@@ -224,7 +225,10 @@ Every protocol behavior traces back to an authoritative source; community implem
 | Encoding order tag → name-len → name → value-len → value | RFC 8010 (IPP/1.1 Encoding & Transport; obsoletes RFC 2910) | §3.1.4 |
 | Multi-valued attribute = tag + zero-length name | RFC 8010 | §3.1.5 |
 | Requests must include attributes-charset / attributes-natural-language / printer-uri | RFC 8011 (IPP/1.1 Model) | §4.1.4, Appendix A |
-| Operation codes (Print-Job 0x0002, Cancel-Job 0x0008, Get-Job-Attributes 0x0009, Get-Jobs 0x000A, Get-Printer-Attributes 0x000B) | RFC 8011 + IANA IPP Registrations | §5.4.15 |
+| Operation codes (Print-Job 0x0002, Validate-Job 0x0004, Create-Job 0x0005, Send-Document 0x0006, Cancel-Job 0x0008, Get-Job-Attributes 0x0009, Get-Jobs 0x000A, Get-Printer-Attributes 0x000B) | RFC 8011 + IANA IPP Registrations | §5.4.15 |
+| Job Template attributes live in request Group 2; `ipp-attribute-fidelity` is a Group 1 operation attribute | RFC 8011 | §4.2.1.1 |
+| `Create-Job` (no document data, no document-format) + `Send-Document` (last-document is a Client MUST) | RFC 8011 | §4.2.4, §4.3.1 |
+| Print-Job response REQUIRED: job-id / job-state / job-state-reasons | RFC 8011 | §4.2.1.2 |
 | Boolean values are always 1 byte (0x00/0x01) | RFC 8011 | §5.1.12 |
 | job-state values 3–9 | RFC 8011 / IPP Guide | §5.3.7 |
 | printer-state values 3–5 | RFC 8011 | §5.4.11 |

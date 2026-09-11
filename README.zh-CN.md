@@ -40,9 +40,10 @@
   - `airPrint` —— 有 URF；交还系统打印面板。
   - `ippDirect` —— 无 URF 但 `pdl` 含 `image/pwg-raster`；可由本包直连打印。
   - `vendorOnly` —— 仅厂商私有格式；引导用户使用厂商 App。
-- **IPP 1.1 客户端**（RFC 8010 / RFC 8011）：`Print-Job`、`Get-Printer-Attributes`、`Get-Job-Attributes`、`Get-Jobs`、`Cancel-Job`；作业状态轮询带瞬态故障容错。
+- **IPP 1.1 客户端**（RFC 8010 / RFC 8011）：`Print-Job`、`Create-Job` + `Send-Document`（多文档）、`Get-Printer-Attributes`、`Get-Job-Attributes`、`Get-Jobs`、`Cancel-Job`；作业状态轮询带瞬态故障容错。
 - **能力引擎** —— `inspect()` 返回 `PrinterCapabilities`：24 项标准属性（身份、状态与原因、是否收作业、文档格式、介质、色彩、双面、分辨率、份数区间、整饰、IPP 版本、操作集、URI 安全），全部**从打印机确定性自报 lenient 解析**（RFC 8011 §6.2）——属性缺失即不支持，绝不推断。新值语法解码：resolution（§5.1.14）、rangeOfInteger（§5.1.15）、boolean（§5.1.12）。
 - **Validate-Job 预检** —— `validateJob()` 先问打印机「这个 Job 你能不能处理」（操作码 0x0004，不带文档数据），返回结构化 `PrintValidationResult`（含 Unsupported Attributes 组，组 tag 0x05）——大文档只在明确放行后才提交。
+- **Job Engine** —— `submit()` / `monitor()` / `getJob()` / `cancel()` 职责拆分（0.6）：提交后拿到不可变 `PrintJob` 快照（job-state 七态 + `job-state-reasons` 作业级原因），`monitor()` 以状态流轮询至终态，瞬态故障有界吸收；`print()` 进度流保持向后兼容，二者共享 gate→协商→编码单一来源。
 - **TLS 传输** —— 仅广播 `_ipps._tcp` 的机型可直接打印（`https://` 端点，默认接受自签证书）。
 - **PWG-raster 编码器**（PWG 5102.4）：1796 字节 `cups_page_header2_t` 页头 + 文件级 `RaS2` 同步字（每文档一次）+ 行组（1 字节行重复计数，1–256 行）+ 像素粒度 PackBits-like 游程编码（sRGB-8，bpp=3）—— 与规范 §4.4.2 样本位图及 CUPS `raster-stream.c` 逐字节比对验证；真机出纸验证通过（EPSON L3250）。
 - **纯 Dart，零 Flutter 依赖** —— 协议核心可离线单测；PDF 栅格化通过 `PdfRasterizer` 端口注入（例如由 `printing` 的 `rasterPdf` 实现）。
@@ -156,6 +157,17 @@ final check = ipp.validateTicket(
 if (!check.valid) {
   print(check.unsupportedAttributes); // 如 ['media']
 }
+
+// 0.6：Job Engine —— submit / monitor / cancel 职责拆分。
+final job = await ipp.submit(document: doc, printer: printer);
+print('${job.jobId} ${job.state.name} ${job.stateReasons}');
+await for (final snapshot in ipp.monitor(job)) {
+  // pending → processing → completed；终态快照后流自动关闭。
+  print(snapshot);
+}
+if (!job.isTerminal) {
+  await ipp.cancel(job); // Cancel-Job
+}
 ```
 
 ### 作业选项
@@ -219,7 +231,10 @@ if (!check.valid) {
 | 编码序 tag → name-len → name → value-len → value | RFC 8010（IPP/1.1 编码与传输；废止 RFC 2910） | §3.1.4 |
 | 同名多值 = tag + 零长度名 | RFC 8010 | §3.1.5 |
 | 请求必含 attributes-charset / attributes-natural-language / printer-uri | RFC 8011（IPP/1.1 Model） | §4.1.4、Appendix A |
-| 操作码（Print-Job 0x0002、Cancel-Job 0x0008、Get-Job-Attributes 0x0009、Get-Jobs 0x000A、Get-Printer-Attributes 0x000B） | RFC 8011 + IANA IPP 注册表 | §5.4.15 |
+| 操作码（Print-Job 0x0002、Validate-Job 0x0004、Create-Job 0x0005、Send-Document 0x0006、Cancel-Job 0x0008、Get-Job-Attributes 0x0009、Get-Jobs 0x000A、Get-Printer-Attributes 0x000B） | RFC 8011 + IANA IPP 注册表 | §5.4.15 |
+| job template 属性位于请求 Group 2（Job Template Attributes）；`ipp-attribute-fidelity` 为 Group 1 操作属性 | RFC 8011 | §4.2.1.1 |
+| `Create-Job`（无文档数据、无 document-format）+ `Send-Document`（last-document 为 Client MUST） | RFC 8011 | §4.2.4、§4.3.1 |
+| Print-Job 响应 REQUIRED：job-id / job-state / job-state-reasons | RFC 8011 | §4.2.1.2 |
 | boolean 值恒 1 字节（0x00/0x01） | RFC 8011 | §5.1.12 |
 | job-state 值域 3–9 | RFC 8011 / IPP Guide | §5.3.7 |
 | printer-state 值域 3–5 | RFC 8011 | §5.4.11 |

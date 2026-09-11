@@ -12,5 +12,6 @@ export 'src/discovery/native_bonjour_discovery.dart';
 export 'src/ipp/ipp_client.dart';
 export 'src/ipp/ipp_message.dart';
 export 'src/ipp_print_core.dart';
+export 'src/job/print_job.dart';
 export 'src/models.dart';
 export 'src/pwg/pwg_raster_encoder.dart';

@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-09-11
+
+Job Engine：作业语义成为内核契约；submit / monitor / cancel 职责拆分。
+
+### Added
+
+- **`PrintJob`**（不可变作业快照，Contract v2 成员）：job-id + job-state
+  （RFC 8011 §5.3.7 七态 + unknown）+ `job-state-reasons`（§5.3.8，原始
+  keyword 透传，`media-jam` ≠ `printer-stopped` 的作业级语义）+ 目标
+  打印机寻址上下文。
+- **submit / monitor / getJob / cancel 职责拆分**：`IppPrint.submit()`
+  （gate → 实时协商 → 编码 → Print-Job，返回打印机应答快照）、
+  `monitor()`（轮询 Get-Job-Attributes 的 `Stream<PrintJob>`，终态关流、
+  超时抛 `IppJobTimeoutException`、瞬态故障有界吸收）、`getJob()`、
+  `cancel(PrintJob)`。`print()` 进度流（`PrintStage`）完全向后兼容，
+  与 `submit()` 共享 gate→协商→编码单一来源 `_prepareSubmission`（防双入口漂移）。
+- **`Create-Job` + `Send-Document`**（RFC 8011 §4.2.4/§4.3.1，opportunistic）：
+  线格式 `buildCreateJob`（无 document-format）/`buildSendDocument`
+  （last-document 为 Client MUST）与 `IppClient.createJob`/`sendDocument`；
+  无上层场景牵引，仅内核能力补全（做成即测）。
+- `IppClient.getJob()`：单作业快照查询（job-id / job-state /
+  job-state-reasons / job-name）；`IppJobSummary.stateReasons` 字段
+  （Get-Jobs / Print-Job 响应同步透出）。
+
+### Fixed
+
+- **`ipp-attribute-fidelity` 组归属（线格式缺陷）**：RFC 8011 §4.2.1.1
+  将其定义为 **Group 1 操作属性**，原实现误写入 Group 2 job template 组
+  （0.5.0 引入；默认不下发故现网未触发）。现于操作属性组下发，并锚定
+  组归属回归测试。
+- **Validate-Job 同构性**：`buildValidateJob` 补齐 fidelity /
+  printer-resolution 镜像下发（原与 Print-Job 不同构，违反 §4.2.3
+  「同构校验」语义）；job template 属性改由三处共用 `_writeJobTemplate`
+  单一来源（Print-Job / Validate-Job / Create-Job，防漂移）。
+- `submitJob` 返回值升级为 `IppJobSummary`（job-id / job-state /
+  job-state-reasons——RFC 8011 §4.2.1.2 三者均为响应 REQUIRED；缺失
+  如实 unknown/空集，不推断）。
+- User-Agent 版本串 `ipp_print/0.3` → `ipp_print/0.6`（0.4/0.5 期间漂移）。
+
 ## [0.5.0] — 2026-09-11
 
 Print Core Foundation（契约冻结 v1）：作业语义层成为可长期依赖的契约。

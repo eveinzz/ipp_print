@@ -32,13 +32,14 @@ enum IppJobState {
       .firstWhere((s) => s.code == code, orElse: () => IppJobState.unknown);
 }
 
-/// Get-Jobs 返回的单个作业摘要。
+/// Get-Jobs / Get-Job-Attributes / Print-Job 响应的单个作业摘要。
 class IppJobSummary {
   const IppJobSummary({
     required this.jobId,
     required this.jobState,
     this.jobName,
     this.userName,
+    this.stateReasons = const <String>[],
   });
 
   final int jobId;
@@ -49,6 +50,11 @@ class IppJobSummary {
 
   /// job-originating-user-name（提交者）。
   final String? userName;
+
+  /// job-state-reasons（RFC 8011 §5.3.8，1setOf keyword，如 `media-jam` /
+  /// `job-incoming` / `job-completed-successfully`）：作业级透传，
+  /// 上层错误页语义必需；原始 keyword 不做解释映射（缺 = 空集）。
+  final List<String> stateReasons;
 }
 
 /// IPP 传输客户端：POST application/ipp 到打印机 631 端口
@@ -102,7 +108,7 @@ class IppClient {
     final request = await _http.postUrl(httpEndpoint);
     request.headers.set(HttpHeaders.contentTypeHeader, 'application/ipp');
     request.headers.set(HttpHeaders.acceptEncodingHeader, 'identity');
-    request.headers.set(HttpHeaders.userAgentHeader, 'ipp_print/0.3');
+    request.headers.set(HttpHeaders.userAgentHeader, 'ipp_print/0.6');
     request.headers.contentLength = ippBody.length;
     request.add(ippBody);
     final response = await request.close();
@@ -110,8 +116,11 @@ class IppClient {
     return (response.statusCode, body);
   }
 
-  /// 提交 Print-Job，返回打印机分配的 job-id。
-  Future<int> submitJob(
+  /// 提交 Print-Job，返回打印机应答的作业快照。
+  ///
+  /// RFC 8011 §4.2.1.2：job-id / job-state / job-state-reasons 均为响应
+  /// REQUIRED 属性；缺失按「不推断」纪律如实 unknown / 空集。
+  Future<IppJobSummary> submitJob(
     DiscoveredPrinter p, {
     required Uint8List document,
     required String documentFormat,
@@ -133,7 +142,109 @@ class IppClient {
     if (jobId == null) {
       throw const IppPrintException('Print-Job response missing job-id');
     }
+    return IppJobSummary(
+      jobId: jobId,
+      jobState: _stateOf(res),
+      stateReasons: [
+        for (final v in res.values('job-state-reasons')) v.asString,
+      ],
+    );
+  }
+
+  /// Create-Job（RFC 8011 §4.2.4）：无文档数据的 Job Creation，返回
+  /// 打印机分配的 job-id；后续以 [sendDocument] 逐文档提交。
+  Future<int> createJob(
+    DiscoveredPrinter p, {
+    PrintOptions options = const PrintOptions(),
+    String jobName = 'ipp_print-document',
+    String userName = 'ipp_print',
+  }) async {
+    final res = await post(
+      p.httpUri,
+      IppCodec.buildCreateJob(
+        printerUri: p.ippUriString,
+        requestId: _nextRequestId,
+        jobName: jobName,
+        options: options,
+        userName: userName,
+      ),
+    );
+    _ensureSuccess(res, 'Create-Job');
+    final jobId = res.firstValue('job-id')?.asInt;
+    if (jobId == null) {
+      throw const IppPrintException('Create-Job response missing job-id');
+    }
     return jobId;
+  }
+
+  /// Send-Document（RFC 8011 §4.3.1）：向 [createJob] 建立的作业追加文档。
+  /// [lastDocument] 为 RFC 8011 §4.3.1.1 的 Client MUST 属性——置 true
+  /// 结束文档流，打印机随即调度作业；[documentFormat] MAY 按文档提供。
+  Future<void> sendDocument(
+    DiscoveredPrinter p, {
+    required int jobId,
+    required Uint8List document,
+    required bool lastDocument,
+    String? documentFormat,
+  }) async {
+    final body = BytesBuilder(copy: false)
+      ..add(IppCodec.buildSendDocument(
+        printerUri: p.ippUriString,
+        jobId: jobId,
+        requestId: _nextRequestId,
+        lastDocument: lastDocument,
+        documentFormat: documentFormat,
+      ))
+      ..add(document);
+    final res = await post(p.httpUri, body.toBytes());
+    _ensureSuccess(res, 'Send-Document');
+  }
+
+  /// 查询单个作业快照（Get-Job-Attributes；0.6 Job Engine 数据源）。
+  ///
+  /// 返回 job-id / job-state / job-state-reasons / job-name；响应无 job 组
+  /// → 抛 [IppPrintException]；缺 job-state → 如实 [IppJobState.unknown]
+  /// （0.4.1 纪律：不再猜 pending）。
+  Future<IppJobSummary> getJob(DiscoveredPrinter p, int jobId) async {
+    final res = await post(
+      p.httpUri,
+      IppCodec.buildGetJobAttributes(
+        printerUri: p.ippUriString,
+        jobId: jobId,
+        requestId: _nextRequestId,
+      ),
+    );
+    _ensureSuccess(res, 'Get-Job-Attributes');
+    IppGroup? jobGroup;
+    for (final g in res.groups) {
+      if (g.tag == IppCodec.tagJobGroup) {
+        jobGroup = g;
+        break;
+      }
+    }
+    if (jobGroup == null) {
+      throw const IppPrintException(
+          'Get-Job-Attributes response has no job group');
+    }
+    final stateCode = _intOf(jobGroup, 'job-state');
+    return IppJobSummary(
+      jobId: _intOf(jobGroup, 'job-id') ?? jobId,
+      jobState: stateCode == null
+          ? IppJobState.unknown
+          : IppJobState.fromCode(stateCode),
+      jobName: _stringOf(jobGroup, 'job-name'),
+      stateReasons: [
+        for (final v in jobGroup.attributes['job-state-reasons'] ??
+            const <IppValue>[])
+          v.asString,
+      ],
+    );
+  }
+
+  /// 响应中 job-state 的 lenient 解码（缺 → unknown，绝不猜 pending）。
+  static IppJobState _stateOf(IppResponse res) {
+    final code = res.firstValue('job-state')?.asInt;
+    return code == null ? IppJobState.unknown : IppJobState.fromCode(code);
   }
 
   /// 查询任务状态枚举。
@@ -204,6 +315,11 @@ class IppClient {
         jobState: IppJobState.fromCode(stateCode),
         jobName: _stringOf(g, 'job-name'),
         userName: _stringOf(g, 'job-originating-user-name'),
+        stateReasons: [
+          for (final v in g.attributes['job-state-reasons'] ??
+              const <IppValue>[])
+            v.asString,
+        ],
       ));
     }
     return summaries;
