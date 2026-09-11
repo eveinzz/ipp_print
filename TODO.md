@@ -112,6 +112,11 @@ Mopria 官方数据（2026-09 核验）：超过 1.2 亿台认证打印机、10,
 - [ ] 能力模型升级（外部复核采纳项）：`enum PrinterCapability`（4 值）
   → 结构化能力集（protocol/document/coverage 维度），路由从「设备属于
   哪一类」改为「具备哪些能力」——仅声明 IPP+PDF 的设备不应被整包拒绝。
+- [ ] Typed value layer（三方终版评估采纳项，经源码核实为真实缺口）：
+  现 `IppValue` 仅 tag+raw+`asString`/`asInt`，boolean/rangeOfInteger/
+  resolution 为 inspect 内定制解码——需上收为泛型类型层并补
+  dateTime（0x31）/collection（0x34 系列）/text-vs-name 语义区分，
+  否则 `media-col-database`/`media-size-supported` 将退化为手工解 raw bytes。
 
 ### 0.5.0 — Print Ticket & Validation
 
