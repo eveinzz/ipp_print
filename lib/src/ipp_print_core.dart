@@ -113,18 +113,31 @@ class IppPrint {
   /// 「这个 Job 你能不能处理」。返回 [PrintValidationResult]；
   /// 打印机不支持该操作时返回 client-error-operation-not-supported
   /// （valid=false），宿主可回退为直接提交。
+  ///
+  /// 整机限时 10s（同 [probe]/[inspect] 挂起防御——半开 TCP 连接下
+  /// 无限等待是 probe 阶段验证过的真实故障模式），超时抛
+  /// [IppPrintException]。
   Future<PrintValidationResult> validateJob(
     DiscoveredPrinter printer, {
     required String documentFormat,
     PrintOptions options = const PrintOptions(),
     String jobName = 'ipp_print-document',
-  }) =>
-      _client.validateJob(
-        printer,
-        documentFormat: documentFormat,
-        options: options,
-        jobName: jobName,
-      );
+  }) async {
+    ippProbeLog('validateJob ${printer.name} -> ${printer.httpUriString}');
+    try {
+      return await _client
+          .validateJob(
+            printer,
+            documentFormat: documentFormat,
+            options: options,
+            jobName: jobName,
+          )
+          .timeout(const Duration(seconds: 10));
+    } on TimeoutException {
+      ippProbeLog('validateJob ${printer.name}: TIMEOUT (10s)');
+      throw const IppPrintException('validateJob: timed out after 10s');
+    }
+  }
 
   /// PDF → 栅格 → PWG → IPP 直连打印。仅接受 ippDirect 级打印机。
   ///

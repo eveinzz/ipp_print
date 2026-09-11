@@ -39,7 +39,7 @@ Mopria 官方数据（2026-09 核验）：超过 1.2 亿台认证打印机、10,
 
 ## 版本路线
 
-### 0.3.0 — Capability Engine（当前版本，实施中）
+### 0.3.0 — Capability Engine（已交付：92/92 插件测试全绿，analyze 零告警）
 
 核心目标：**让 `ipp_print` 真正理解一台 IPP Printer。**
 
@@ -59,10 +59,10 @@ Mopria 官方数据（2026-09 核验）：超过 1.2 亿台认证打印机、10,
 - [x] `Validate-Job`（操作码 0x0004）+ `PrintValidationResult`
   （valid / invalid + unsupported-attributes 组透出），提交大文档前先问打印机。
 - [x] `discover()` 三类服务并行浏览（消除顺序 3×timeout 最坏情况）。
-- [x] `getJobs` 脏组防御：缺 `job-id`/`job-state` 的组跳过并计数，不再静默 0/pending。
-- 诚实边界：`copies-supported` 为 rangeOfInteger（需配对解析）；
-  `media-col-database`/`media-size-supported` 为复杂集合，0.3 仅透出原始
+- [x] `getJobs` 脏组防御：缺 `job-id`/`job-state` 的组跳过并记录日志，不再静默 0/pending。
+- 诚实边界：`media-col-database`/`media-size-supported` 为复杂集合，0.3 仅透出原始
   keyword 级（`media-supported`），结构化解析留待后续版本。
+  （`copies-supported` 已按 rangeOfInteger 配对解析为 `copiesMin`/`copiesMax`。）
 
 ### 0.4.0 — Document Pipeline
 
