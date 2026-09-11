@@ -111,12 +111,15 @@ Mopria 官方数据（2026-09 核验）：超过 1.2 亿台认证打印机、10,
   PDF（2026-09-11 inspect），PDF 文档必走栅格回退路径（测试锚定）。
 - [x] `DocumentEncoder` 抽象 + `PwgRasterEncoder` 挂入体系
   （只抽象不重写，规范金标测试原样保留）。
-- [ ] 文档格式事实基线（IPP Everywhere v1.1 §6 一手条款）：
-  PWG Raster = MUST（全机型）；JPEG = 彩色机 MUST / 单色机 SHOULD；
-  **PDF = 仅 SHOULD**——PDF 直投必须机会主义（运行时查证，L3250 未实测）；
-  URF 不属于 IPP Everywhere（Apple 体系）。
-- [ ] 底层通用 `print(document, …)` 集成协商器与编码器；
-  `printPdf()` 保留为便利 API。
+- [x] 文档格式事实基线（IPP Everywhere v1.1 §6 一手条款，PWG 5100.14-2020
+  p.42 已核验原文）：PWG Raster = MUST（全机型）；JPEG = 彩色机 MUST /
+  单色机 SHOULD；**PDF = 仅 SHOULD**——PDF 直投必须机会主义（运行时查证，
+  L3250 未实测）；§6 未列入 URF（Apple 体系，非 IPP Everywhere 成员）。
+- [x] 底层通用 `print(document, …)` 集成协商器与编码器（TDD，6 例新测试）：
+  声明集由内核**实时** Get-Printer-Attributes 获取（10s 限时，不用宿主缓存）；
+  直投分支 document-format 取打印机声明原样；栅格回退分支仅支持 PDF 源
+  （非 PDF 无编码器 → 如实拒绝）；`printPdf()` 转调 `print()`，行为增强为
+  「声明集权威下发 document-format」（原硬编码 pwg-raster，多一次查询）。
 - [ ] 能力模型升级（外部复核采纳项）：`enum PrinterCapability`（4 值）
   → 结构化能力集（protocol/document/coverage 维度），路由从「设备属于
   哪一类」改为「具备哪些能力」——仅声明 IPP+PDF 的设备不应被整包拒绝。

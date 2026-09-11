@@ -21,7 +21,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `DocumentEncoder` abstraction with `PwgRasterEncoder` as the first
     member (interface only, no rewrite — golden-format tests unchanged);
   - `models.dart` split into `models/` domain files (identity /
-    capabilities / print options / exceptions) behind a compatible barrel.
+    capabilities / print options / exceptions) behind a compatible barrel;
+  - **`IppPrint.print(document, …)`** — the pipeline's general entry point:
+    the kernel queries `document-format-supported` live (10 s guard) and
+    routes via the negotiator — declared MIME → passthrough (document bytes
+    submitted verbatim, vector/text preserved); else `image/pwg-raster`
+    → raster fallback (PDF documents only, injected `PdfRasterizer`);
+    else throws. `job-name` comes from `PrintDocument.name`;
+  - `printPdf()` is now a convenience wrapper around `print()`: the
+    submitted `document-format` comes from the printer's live declaration
+    set instead of a hardcoded `image/pwg-raster` (adds one
+    Get-Printer-Attributes round-trip; PWG wire format unchanged).
 
 ## [0.3.2] — 2026-09-11
 

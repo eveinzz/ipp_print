@@ -119,8 +119,22 @@ final validation = await ipp.validateJob(
 );
 if (!validation.valid) { /* 把 validation.statusCode 呈现给宿主 */ }
 
-// 3. 通过 IPP 直连打印 PDF（仅 ippDirect）。
+// 3. 通过 IPP 直连打印（仅 ippDirect）。
 if (status == PrinterProbeStatus.ready) {
+  // 3a. 通用入口（0.4 Document Pipeline）：内核实时查询打印机的
+  // document-format-supported 并路由——声明该 MIME → 直投（字节原样提交，
+  // 保矢量与文本层）；否则含 image/pwg-raster → 栅格回退（仅限 PDF 源 +
+  // 注入 PdfRasterizer）；否则抛异常。声明 application/pdf 的机型
+  // （IPP Everywhere §6：PDF 仅 SHOULD）可机会主义直投 PDF。
+  await for (final progress in ipp.print(
+    document: PrintDocument(bytes: pdfBytes, mimeType: 'application/pdf'),
+    printer: printer,
+    rasterizer: myPdfRasterizer, // 栅格回退必需
+  )) {
+    print('${progress.stage}${progress.page != null ? ' p${progress.page}' : ''}');
+  }
+
+  // 3b. 便利 API：等价于 3a（mimeType 固定 application/pdf）。
   await for (final progress in ipp.printPdf(
     pdfBytes: pdfBytes,
     printer: printer,

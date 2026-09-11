@@ -15,10 +15,14 @@ class FakeIppClient extends IppClient {
   final Map<int, Uint8List> responses;
   final operations = <int>[];
 
+  /// 原始请求报文（按发送顺序），供 wire 级断言（document-format 等）。
+  final bodies = <Uint8List>[];
+
   @override
   Future<IppResponse> post(Uri httpEndpoint, Uint8List ippBody) async {
     final op = (ippBody[2] << 8) | ippBody[3];
     operations.add(op);
+    bodies.add(ippBody);
     final response = responses[op];
     if (response == null) {
       throw IppPrintException('unexpected op 0x${op.toRadixString(16)}');
@@ -153,6 +157,7 @@ void main() {
 
   test('printPdf：栅格 → 编码 → 提交 → 终态 done（进度流完整）', () async {
     final client = FakeIppClient({
+      IppCodec.opGetPrinterAttributes: printerOk,
       IppCodec.opPrintJob: printOk,
       IppCodec.opGetJobAttributes: printOk,
     });
@@ -197,8 +202,8 @@ void main() {
     );
     expect(client.operations, isEmpty);
   });
-}
 
+}
 // —— 测试辅助：属性字节拼装（与 FakeIppClient 响应构造配套）——
 
 List<int> _respAttr(String name, int v) {

@@ -119,8 +119,23 @@ final validation = await ipp.validateJob(
 );
 if (!validation.valid) { /* surface validation.statusCode to the host */ }
 
-// 3. Print a PDF via IPP direct connection (ippDirect only).
+// 3. Print via IPP direct connection (ippDirect only).
 if (status == PrinterProbeStatus.ready) {
+  // 3a. General entry (0.4 Document Pipeline): the kernel queries the
+  // printer's document-format-supported live and routes — declared MIME
+  // → passthrough (verbatim bytes, vector/text preserved); else
+  // image/pwg-raster → raster fallback (PDF source + PdfRasterizer);
+  // else throws. PDF direct-print works opportunistically on printers
+  // that declare application/pdf (SHOULD per IPP Everywhere §6).
+  await for (final progress in ipp.print(
+    document: PrintDocument(bytes: pdfBytes, mimeType: 'application/pdf'),
+    printer: printer,
+    rasterizer: myPdfRasterizer, // required for the raster fallback
+  )) {
+    print('${progress.stage}${progress.page != null ? ' p${progress.page}' : ''}');
+  }
+
+  // 3b. Convenience wrapper: same as 3a with mimeType application/pdf.
   await for (final progress in ipp.printPdf(
     pdfBytes: pdfBytes,
     printer: printer,
