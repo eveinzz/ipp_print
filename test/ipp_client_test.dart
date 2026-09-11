@@ -268,6 +268,21 @@ void main() {
     expect(server.requests.length, 2); // Print-Job + Get-Job-Attributes
   });
 
+  test('fromCode：未知 job-state 如实映射 unknown（绝不猜 pending）', () {
+    expect(IppJobState.fromCode(3), IppJobState.pending);
+    expect(IppJobState.fromCode(9), IppJobState.completed);
+    expect(IppJobState.fromCode(99), IppJobState.unknown);
+    // unknown 非终态：waitForTerminalState 继续轮询（不误判、不静默丢弃）。
+    expect(IppJobState.unknown.isTerminal, isFalse);
+  });
+
+  test('getJobState：响应缺 job-state → unknown（不再猜 pending）', () async {
+    server.enqueueIpp(
+        _wrap(0, [0x02], _attr(0x21, 'job-id', _i32(42))));
+    final state = await client.getJobState(printer, 42);
+    expect(state, IppJobState.unknown);
+  });
+
   test('打印机不可达 → SocketException（离线语义，供 probe 映射 offline）',
       () async {
     final bad = DiscoveredPrinter(

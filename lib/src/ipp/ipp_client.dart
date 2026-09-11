@@ -11,6 +11,7 @@ part 'ipp_client_validate.dart';
 /// job-state 枚举（RFC 8011 §5.3.7 / IPP Guide：3 pending、4 pending-held、
 /// 5 processing、6 processing-stopped、7 canceled、8 aborted、9 completed）。
 enum IppJobState {
+  unknown(-1),
   pending(3),
   pendingHeld(4),
   processing(5),
@@ -25,8 +26,10 @@ enum IppJobState {
   bool get isTerminal =>
       this == canceled || this == aborted || this == completed;
 
+  /// 未知值如实映射 [unknown]（0.4.1 修复：原 orElse→pending 属静默猜测，
+  /// 违反「缺≠支持、绝不推断」纪律）；unknown 非终态，轮询方继续查询。
   static IppJobState fromCode(int code) => IppJobState.values
-      .firstWhere((s) => s.code == code, orElse: () => IppJobState.pending);
+      .firstWhere((s) => s.code == code, orElse: () => IppJobState.unknown);
 }
 
 /// Get-Jobs 返回的单个作业摘要。
@@ -150,7 +153,8 @@ class IppClient {
     );
     _ensureSuccess(res, 'Get-Job-Attributes');
     final code = res.firstValue('job-state')?.asInt;
-    return IppJobState.fromCode(code ?? IppJobState.pending.code);
+    // 缺失/未知 job-state 如实 unknown（0.4.1：不再猜 pending）。
+    return code == null ? IppJobState.unknown : IppJobState.fromCode(code);
   }
 
   /// 取消作业（RFC 8011 §4.3.3）。作业不存在时打印机回

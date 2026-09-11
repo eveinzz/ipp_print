@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import '../models.dart';
@@ -281,7 +282,7 @@ class IppCodec {
       require(nameLen);
       final name = nameLen == 0
           ? lastName
-          : String.fromCharCodes(data.sublist(i, i + nameLen));
+          : utf8.decode(data.sublist(i, i + nameLen), allowMalformed: true);
       i += nameLen;
       require(2);
       final valueLen = bd.getUint16(i, Endian.big);
@@ -347,7 +348,9 @@ class _Builder {
   void _flushName() => _lastName = null;
 
   void _writeName(String name) {
-    final nb = Uint8List.fromList(name.codeUnits);
+    // RFC 8011：attributes-charset=utf-8，属性名按 UTF-8 编码
+    //（0.4.1 修复：原 codeUnits 为 UTF-16 码元直写，非 ASCII 名即坏字节）。
+    final nb = Uint8List.fromList(utf8.encode(name));
     _body.addByte((nb.length >> 8) & 0xFF);
     _body.addByte(nb.length & 0xFF);
     _body.add(nb);
@@ -362,7 +365,9 @@ class _Builder {
       vb = Uint8List(4)
         ..buffer.asByteData().setInt32(0, value, Endian.big);
     } else {
-      vb = Uint8List.fromList(value.toString().codeUnits);
+      // RFC 8011：文本类值（text/name/keyword/uri…）按 UTF-8 编码。
+      // （0.4.1 修复：原 codeUnits 对非 ASCII 值（如中文 job-name）编出坏字节。）
+      vb = Uint8List.fromList(utf8.encode(value.toString()));
     }
     _body.addByte((vb.length >> 8) & 0xFF);
     _body.addByte(vb.length & 0xFF);

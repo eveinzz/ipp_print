@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] — 2026-09-11
+
+### Fixed
+
+- **UTF-8 correctness (RFC 8011 `attributes-charset=utf-8`)**: attribute
+  names and text values were encoded with `String.codeUnits` (UTF-16 code
+  units written raw), and responses decoded with `String.fromCharCodes` —
+  non-ASCII values (e.g. a Chinese `job-name`, or a Chinese
+  `printer-info` returned by the printer) produced corrupt bytes in both
+  directions. Encoding now goes through `utf8.encode`; decoding through
+  `utf8.decode(allowMalformed: true)` (lenient — vendor mojibake becomes
+  replacement characters instead of an exception). ASCII behavior is
+  byte-identical; golden wire tests unchanged.
+
+### Changed
+
+- `IppJobState.fromCode` maps unknown `job-state` values to the new
+  `IppJobState.unknown` instead of silently guessing `pending`; a
+  Get-Job-Attributes response missing `job-state` also yields `unknown`
+  ("not declared" ≠ "supported"). `unknown` is non-terminal, so
+  `waitForTerminalState` keeps polling — no misjudgment.
+- Added GitHub Actions CI (analyze + test on stable Flutter).
+
 ## [0.4.0] — 2026-09-11
 
 ### Added

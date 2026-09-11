@@ -4,6 +4,7 @@
 /// 再导出，既有导入路径不受影响。
 library;
 
+import 'dart:convert';
 import 'dart:typed_data';
 
 import '../models.dart';
@@ -72,7 +73,11 @@ class IppValue {
   final Uint8List raw;
 
   /// 文本类值（keyword/uri/charset/name/mime 等）解码。
-  String get asString => String.fromCharCodes(raw);
+  ///
+  /// RFC 8011：attributes-charset=utf-8，文本类值按 UTF-8 解码
+  /// （0.4.1 修复：原 fromCharCodes 对中文等多字节值产生 mojibake）。
+  /// allowMalformed：厂商实现各异的坏字节按替换符宽容处理，绝不抛。
+  String get asString => utf8.decode(raw, allowMalformed: true);
 
   /// integer/enum 值解码（非 4 字节抛 [IppPrintException]）。
   int get asInt {

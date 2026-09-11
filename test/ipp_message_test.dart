@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:ipp_print/src/ipp/ipp_message.dart';
@@ -409,4 +410,73 @@ void main() {
       );
     });
   });
+
+  group('UTF-8 编码契约（RFC 8011：attributes-charset=utf-8，0.4.1）', () {
+    test('buildPrintJob：中文 job-name 按 UTF-8 编码（非 UTF-16 码元直写）', () {
+      final body = IppCodec.buildPrintJob(
+        printerUri: 'ipp://192.168.0.106:631/ipp/print',
+        documentFormat: 'application/pdf',
+        requestId: 7,
+        jobName: '好字帖',
+      );
+      // UTF-8 字节（好=E5A5BD 字=E5AD97 帖=E5B896）确实出现在线格式。
+      expect(_indexOf(body, utf8.encode('好字帖')), isNonNegative,
+          reason: 'job-name 必须按 attributes-charset=utf-8 编码');
+      // 旧缺陷指纹：codeUnits 直写 '好字帖' → 59 7D 5B 57 5E 16。
+      expect(_indexOf(body, const [0x59, 0x7D, 0x5B, 0x57, 0x5E, 0x16]), -1,
+          reason: 'UTF-16 码元直写不得再出现');
+    });
+
+    test('parseResponse：UTF-8 中文值正确解码（name 语法，中文 printer-info）',
+        () {
+      final parsed = IppCodec.parseResponse(_utf8Resp(
+        _utf8Attr(0x42, 'printer-make-and-model',
+            utf8.encode('爱普生 L3250 系列')),
+      ));
+      expect(parsed.firstValue('printer-make-and-model')!.asString,
+          '爱普生 L3250 系列');
+    });
+
+    test('parseResponse：非 UTF-8 字节宽容解码不抛（lenient 纪律）', () {
+      final parsed = IppCodec.parseResponse(_utf8Resp(
+        _utf8Attr(0x42, 'printer-make-and-model', const [0xFF, 0xFE, 0xC3]),
+      ));
+      expect(
+          parsed.firstValue('printer-make-and-model')!.asString, isA<String>());
+    });
+  });
 }
+
+/// 子序列查找（金标断言用，独立于被测代码）。
+int _indexOf(List<int> haystack, List<int> needle) {
+  for (var i = 0; i + needle.length <= haystack.length; i++) {
+    var ok = true;
+    for (var j = 0; j < needle.length; j++) {
+      if (haystack[i + j] != needle[j]) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) return i;
+  }
+  return -1;
+}
+
+List<int> _utf8Attr(int tag, String name, List<int> value) {
+  final nb = utf8.encode(name);
+  return [
+    tag,
+    (nb.length >> 8) & 0xFF, nb.length & 0xFF, ...nb,
+    (value.length >> 8) & 0xFF, value.length & 0xFF, ...value,
+  ];
+}
+
+Uint8List _utf8Resp(List<int> attrs) => Uint8List.fromList([
+      0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 1, //
+      0x01,
+      ..._utf8Attr(0x47, 'attributes-charset', utf8.encode('utf-8')),
+      ..._utf8Attr(0x48, 'attributes-natural-language', utf8.encode('en')),
+      0x04,
+      ...attrs,
+      0x03,
+    ]);
