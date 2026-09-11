@@ -97,30 +97,6 @@ Mopria 官方数据（2026-09 核验）：超过 1.2 亿台认证打印机、10,
 - [x] `vendorOnly` 注释精确化：语义是「本包不可达」（无可直连栅格路径），
   而非「仅厂商私有」——仅声明 IPP+PDF 的设备同样归此类。
 
-### 0.4.1 — Protocol & Contract Correctness（已交付，2026-09-11）
-
-触发：三方 ZIP 全量源码审计报告（2026-09-11）——UTF-8 缺陷经源码逐行核实为真；
-job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收口。
-
-- [x] **UTF-8 编码契约修复（RFC 8011 attributes-charset=utf-8）**：
-  `codeUnits`（UTF-16 码元直写）/`fromCharCodes` → `utf8.encode` /
-  `utf8.decode(allowMalformed: true)`（中文 job-name 出线、中文
-  printer-info 入线双向修复；ASCII 行为字节级不变，金标原样）。
-  测试锚点：中文 job-name 线格式金标 + 旧缺陷指纹负断言 + 中文值解码 +
-  坏字节宽容不抛。mDNS TXT latin1 往返**不在**本次范围（RFC 6763 TXT
-  键值恒 ASCII，无损）。
-- [x] `IppJobState.unknown`：`fromCode` 未知值 / 响应缺 `job-state` →
-  unknown（原 orElse→pending 属静默猜测，违反不推断纪律）；unknown 非终态，
-  `waitForTerminalState` 继续轮询不误判。
-- [x] GitHub Actions CI（analyze + test，stable Flutter 3.35.0）。
-- 外部佐证归档：Capability Gate 与 PDF 直投的冲突（TXT pdl 无 pwg-raster
-  → vendorOnly → print() 门拒绝）为**已知已跟踪项**——修复依赖下方能力
-  模型升级，不单独立项。
-- 0.5 PrintTicket 设计注记（本报告采纳）：RFC 8011 `ipp-attribute-fidelity`
-  语义——`valid=true` ≠ 属性完全保真（非保真模式下打印机可忽略/替换
-  不支持值）；PrintTicket 应含 fidelity/strictness 维度
-  （L3250 jobCreationAttrs 确声明 ipp-attribute-fidelity 可提交）。
-
 ### 0.4.0 — Document Pipeline（骨架已交付 2026-09-11，进行中）
 
 核心目标：**让 `ipp_print` 自己决定「怎么打印」。**
@@ -152,6 +128,30 @@ job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收�
   resolution 为 inspect 内定制解码——需上收为泛型类型层并补
   dateTime（0x31）/collection（0x34 系列）/text-vs-name 语义区分，
   否则 `media-col-database`/`media-size-supported` 将退化为手工解 raw bytes。
+
+### 0.4.1 — Protocol & Contract Correctness（已交付，2026-09-11）
+
+触发：三方 ZIP 全量源码审计报告（2026-09-11）——UTF-8 缺陷经源码逐行核实为真；
+job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收口。
+
+- [x] **UTF-8 编码契约修复（RFC 8011 attributes-charset=utf-8）**：
+  `codeUnits`（UTF-16 码元直写）/`fromCharCodes` → `utf8.encode` /
+  `utf8.decode(allowMalformed: true)`（中文 job-name 出线、中文
+  printer-info 入线双向修复；ASCII 行为字节级不变，金标原样）。
+  测试锚点：中文 job-name 线格式金标 + 旧缺陷指纹负断言 + 中文值解码 +
+  坏字节宽容不抛。mDNS TXT latin1 往返**不在**本次范围（RFC 6763 TXT
+  键值恒 ASCII，无损）。
+- [x] `IppJobState.unknown`：`fromCode` 未知值 / 响应缺 `job-state` →
+  unknown（原 orElse→pending 属静默猜测，违反不推断纪律）；unknown 非终态，
+  `waitForTerminalState` 继续轮询不误判。
+- [x] GitHub Actions CI（analyze + test，stable Flutter 3.35.0）。
+- 外部佐证归档：Capability Gate 与 PDF 直投的冲突（TXT pdl 无 pwg-raster
+  → vendorOnly → print() 门拒绝）为**已知已跟踪项**——修复依赖下方能力
+  模型升级，不单独立项。
+- 0.5 PrintTicket 设计注记（本报告采纳）：RFC 8011 `ipp-attribute-fidelity`
+  语义——`valid=true` ≠ 属性完全保真（非保真模式下打印机可忽略/替换
+  不支持值）；PrintTicket 应含 fidelity/strictness 维度
+  （L3250 jobCreationAttrs 确声明 ipp-attribute-fidelity 可提交）。
 
 ### 0.5.0 — Print Ticket & Validation
 
