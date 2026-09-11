@@ -39,6 +39,10 @@ Job Engine：作业语义成为内核契约；submit / monitor / cancel 职责�
   printer-resolution 镜像下发（原与 Print-Job 不同构，违反 §4.2.3
   「同构校验」语义）；job template 属性改由三处共用 `_writeJobTemplate`
   单一来源（Print-Job / Validate-Job / Create-Job，防漂移）。
+- **Create-Job 保真语义**：`buildCreateJob` 补 `ipp-attribute-fidelity`
+  同构下发（§4.2.4 排除清单仅四个每文档属性，fidelity 不在其列；
+  job template 值随本请求提供，保真语义同样适用——验收审计补齐，
+  与 Validate-Job 修复同类）。
 - `submitJob` 返回值升级为 `IppJobSummary`（job-id / job-state /
   job-state-reasons——RFC 8011 §4.2.1.2 三者均为响应 REQUIRED；缺失
   如实 unknown/空集，不推断）。

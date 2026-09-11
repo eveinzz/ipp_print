@@ -10,8 +10,9 @@ part 'ipp_message_builder.dart';
 
 /// IPP 1.1（RFC 8011/RFC 8010）报文编解码。
 ///
-/// 只实现本项目需要的三种操作：Print-Job、Get-Printer-Attributes、
-/// Get-Job-Attributes；值编码覆盖 keyword/integer/enum/boolean/name/
+/// 实现的操作（0.6：8 种）：Print-Job、Validate-Job、Create-Job、
+/// Send-Document、Get-Printer-Attributes、Get-Job-Attributes、Get-Jobs、
+/// Cancel-Job；值编码覆盖 keyword/integer/enum/boolean/resolution/name/
 /// uri/charset/language/mime 共用集合。首属性恒为 attributes-charset
 /// （规约要求其必须第一个出现）。
 class IppCodec {
@@ -232,6 +233,14 @@ class IppCodec {
       ..attr(tagUri, 'printer-uri', printerUri.toString())
       ..attr(tagName, 'requesting-user-name', userName)
       ..attr(tagName, 'job-name', jobName);
+    // ipp-attribute-fidelity 与 Print-Job 同构：§4.2.4 的排除清单只含
+    // document-name / document-format / compression / document-natural-
+    // language 四个每文档属性，fidelity 不在其列；job template 值随本
+    // 请求提供，保真语义同样适用（0.6 审计补齐，与 Validate-Job 修复同类）。
+    if (options.fidelity != null) {
+      b.attr(tagBoolean, 'ipp-attribute-fidelity',
+          options.fidelity == PrintFidelity.exact);
+    }
     b.group(tagJobGroup);
     _writeJobTemplate(b, options);
     return b.take();

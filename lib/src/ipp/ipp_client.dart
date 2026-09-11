@@ -248,6 +248,12 @@ class IppClient {
   }
 
   /// 查询任务状态枚举。
+  ///
+  /// 与 [getJob] 的分工（非冗余，勿合并）：本方法面向**轮询容错**——
+  /// lenient 解析（firstValue 跨组找 job-state，响应无 job 组也不抛），
+  /// 异常形态交 [waitForTerminalState] 的瞬态吸收处理；[getJob] 面向
+  /// **契约快照**——严格要求 job 组，缺失即抛 [IppPrintException]。
+  /// 两者共用 [IppCodec.buildGetJobAttributes] 单一报文来源（防线格式漂移）。
   Future<IppJobState> getJobState(DiscoveredPrinter p, int jobId) async {
     final res = await post(
       p.httpUri,
