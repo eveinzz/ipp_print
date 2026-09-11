@@ -90,6 +90,8 @@ void main() {
     ..._respKw('print-color-mode-default', 'monochrome'),
     ..._respKw('sides-supported', 'one-sided'),
     ..._respKw('sides-default', 'one-sided'),
+    ..._respRes('printer-resolution-supported', 360, 360),
+    ..._respRes('printer-resolution-default', 360, 360),
   ]);
   final printerNoPwg = _resp(0, 0x04, [
     ..._respKw('document-format-supported', 'application/octet-stream'),
@@ -110,6 +112,9 @@ void main() {
     expect(info!.colorModeDefault, 'monochrome');
     expect(info!.sidesSupported, ['one-sided']);
     expect(info!.sidesDefault, 'one-sided');
+    // 0.3.1：分辨率协商数据源透出（宿主据此选栅格 dpi）
+    expect(info!.resolutionsSupported, ['360x360dpi']);
+    expect(info!.resolutionDefault, '360x360dpi');
   });
 
   test('probe：TXT 判 ippDirect 但 IPP 不支持 pwg-raster → 降级', () async {
@@ -198,6 +203,18 @@ List<int> _respKw(String name, String value) {
   return [
     0x44, (nb.length >> 8) & 0xFF, nb.length & 0xFF, ...nb,
     (vb.length >> 8) & 0xFF, vb.length & 0xFF, ...vb,
+  ];
+}
+
+/// resolution 语法属性（RFC 8011 §5.1.14：cross(i32)+feed(i32)+unit，
+/// 3=dpi，共 9 字节值）。
+List<int> _respRes(String name, int cross, int feed) {
+  final nb = name.codeUnits;
+  return [
+    0x35, (nb.length >> 8) & 0xFF, nb.length & 0xFF, ...nb, 0, 9,
+    (cross >> 24) & 0xFF, (cross >> 16) & 0xFF, (cross >> 8) & 0xFF, cross,
+    (feed >> 24) & 0xFF, (feed >> 16) & 0xFF, (feed >> 8) & 0xFF, feed,
+    3,
   ];
 }
 

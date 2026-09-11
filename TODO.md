@@ -64,6 +64,21 @@ Mopria 官方数据（2026-09 核验）：超过 1.2 亿台认证打印机、10,
   keyword 级（`media-supported`），结构化解析留待后续版本。
   （`copies-supported` 已按 rangeOfInteger 配对解析为 `copiesMin`/`copiesMax`。）
 
+### 0.3.1 — Resolution Negotiation（已交付，2026-09-11）
+
+触发：真机能力侦察（L3250，24 属性全量自报）发现 App 固定 300dpi
+**不在**打印机声明集 `[360x360dpi, 1440x720dpi]` 内——宽容机型接受、
+严格机型可能拒收/异常渲染。
+
+- [x] probe 请求集 8 → 10 属性（加 `printer-resolution-supported`/-default），
+  `PrinterInfo.resolutionsSupported` / `resolutionDefault` 透出。
+- [x] `printPdf(dpi: …)` per-call 覆盖（PWG 页头 `cupsHWResolution`/`PageSize`）。
+- [x] 宿主协商（好字帖）：`resolvePrintDpi` 纯函数——只在**对称**声明项中取
+  距 300 最近者；非 dpi 单位不换算不猜值；无声明回退 300。
+- 真机数据同轮归档：`printer-name`=URI 路径片段（不可当显示名）；
+  `media-ready`=[]（判纸只能用 `media-supported`）；16K 可命中
+  `om_16k_195x270mm`；operations 覆盖插件全部 6 操作。
+
 ### 0.4.0 — Document Pipeline
 
 核心目标：**让 `ipp_print` 自己决定「怎么打印」。**

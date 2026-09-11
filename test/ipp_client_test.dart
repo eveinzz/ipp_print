@@ -159,7 +159,13 @@ Uint8List _printerAttributesResponse() => _wrap(
           _attr(0x44, 'print-color-mode-default', _s('auto')) +
           _attr(0x44, 'sides-supported', _s('one-sided')) +
           _raw(0x44, _s('two-sided-long-edge')) +
-          _attr(0x44, 'sides-default', _s('one-sided')),
+          _attr(0x44, 'sides-default', _s('one-sided')) +
+          // 分辨率协商（0.3.1；resolution 语法 RFC 8011 §5.1.14）
+          _attr(0x35, 'printer-resolution-supported',
+              [..._i32(360), ..._i32(360), 3]) +
+          _raw(0x35, [..._i32(1440), ..._i32(720), 3]) +
+          _attr(0x35, 'printer-resolution-default',
+              [..._i32(360), ..._i32(360), 3]),
     );
 
 Uint8List _jobStateResponse() => _wrap(
@@ -220,6 +226,8 @@ void main() {
     expect(attrs.documentFormats, ['image/pwg-raster']);
     expect(attrs.state, 'idle');
     expect(attrs.makeModel, 'EPSON L3250 Series');
+    expect(attrs.resolutionsSupported, ['360x360dpi', '1440x720dpi']);
+    expect(attrs.resolutionDefault, '360x360dpi');
   });
 
   test('getPrinterAttributes：解析色彩/双面 supported 与 default（UI 可选项数据源）',

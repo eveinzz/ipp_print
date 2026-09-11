@@ -124,8 +124,9 @@ void main() {
       printerUri: 'ipp://p.local:631/ipp/print',
       requestId: 1,
     );
-    // 手工验证：报文里 "requested-attributes" 恰好出现一次且含 8 个值
-    // （后 4 项为色彩/双面能力协商，供宿主 UI 生成可选项）
+    // 手工验证：报文里 "requested-attributes" 恰好出现一次且含 10 个值
+    // （后 4 项为色彩/双面能力协商，供宿主 UI 生成可选项；
+    //  0.3.1 加分辨率 supported/default——栅格 dpi 协商数据源）
     final s = String.fromCharCodes(actual);
     expect('requested-attributes'.allMatches(s), hasLength(1));
     expect(s.contains('media-supported'), isTrue);
@@ -134,6 +135,8 @@ void main() {
     expect(s.contains('print-color-mode-default'), isTrue);
     expect(s.contains('sides-supported'), isTrue);
     expect(s.contains('sides-default'), isTrue);
+    expect(s.contains('printer-resolution-supported'), isTrue);
+    expect(s.contains('printer-resolution-default'), isTrue);
     // 头部 operation = 0x000B
     expect(actual[2], 0x00);
     expect(actual[3], 0x0B);

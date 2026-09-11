@@ -11,6 +11,8 @@ class PrinterAttributes {
     this.colorModeDefault,
     this.sidesSupported = const <String>[],
     this.sidesDefault,
+    this.resolutionsSupported = const <String>[],
+    this.resolutionDefault,
   });
 
   final List<String> mediaSupported;
@@ -33,6 +35,12 @@ class PrinterAttributes {
   /// `sides-default`；null = 未声明。
   final String? sidesDefault;
 
+  /// `printer-resolution-supported`（0.3.1 分辨率协商数据源；空 = 未声明）。
+  final List<String> resolutionsSupported;
+
+  /// `printer-resolution-default`；null = 未声明。
+  final String? resolutionDefault;
+
   /// IPP printer-state 枚举 → 可读状态。
   static String? stateFromEnum(int? v) => switch (v) {
         3 => 'idle',
@@ -43,7 +51,7 @@ class PrinterAttributes {
 }
 
 extension PrinterInspect on IppClient {
-  /// probe 路径：解析 probe 兼容的 8 属性集。
+  /// probe 路径：解析 probe 兼容的 10 属性集（0.3.1 加分辨率协商数据源）。
   Future<PrinterAttributes> getPrinterAttributes(DiscoveredPrinter p) async {
     final res = await post(
       p.httpUri,
@@ -63,6 +71,8 @@ extension PrinterInspect on IppClient {
       colorModeDefault: _stringOf(g, 'print-color-mode-default'),
       sidesSupported: _keywords(g, 'sides-supported'),
       sidesDefault: _stringOf(g, 'sides-default'),
+      resolutionsSupported: _resolutions(g, 'printer-resolution-supported'),
+      resolutionDefault: _resolutionText(g, 'printer-resolution-default'),
     );
   }
 

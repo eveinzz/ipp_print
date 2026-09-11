@@ -73,6 +73,8 @@ class IppPrint {
         colorModeDefault: attrs.colorModeDefault,
         sidesSupported: attrs.sidesSupported,
         sidesDefault: attrs.sidesDefault,
+        resolutionsSupported: attrs.resolutionsSupported,
+        resolutionDefault: attrs.resolutionDefault,
       );
       onInfo?.call(info);
       return ok ? PrinterProbeStatus.ready : PrinterProbeStatus.unsupported;
@@ -143,26 +145,34 @@ class IppPrint {
   ///
   /// [rasterizer] 由宿主 App 注入（如基于 printing.rasterPdf 的适配器），
   /// 插件本体不绑定渲染实现。
+  ///
+  /// [dpi] 覆盖构造时的默认 dpi（0.3.1）：栅格化与 PWG 页头
+  /// `cupsHWResolution` / `PageSize` 换算随之改变。**取值应来自
+  /// `PrinterInfo.resolutionsSupported` 的协商结果**——300dpi 并非
+  /// 所有打印机声明支持（L3250 实测声明 360x360 / 1440x720），宽容
+  /// 机型接受、严格机型可能拒收或异常渲染；null（默认）沿用构造值。
   Stream<PrintProgress> printPdf({
     required List<int> pdfBytes,
     required DiscoveredPrinter printer,
     required PdfRasterizer rasterizer,
     PrintOptions options = const PrintOptions(),
     Duration jobTimeout = const Duration(minutes: 5),
+    int? dpi,
   }) async* {
     if (CapabilityClassifier.classify(printer.txt) !=
         PrinterCapability.ippDirect) {
       throw const IppPrintException(
           'printer is not IPP-direct capable (see probe())');
     }
+    final encoder = dpi == null ? _encoder : PwgRasterEncoder(dpi: dpi);
     yield const PrintProgress(PrintStage.rasterizing);
     final document = BytesBuilder(copy: false);
     // PWG 5102.4 Figure 1：同步字为文件级，整个文档只出现一次。
-    document.add(_encoder.syncWordBytes);
+    document.add(encoder.syncWordBytes);
     var pageNo = 0;
-    await for (final page in rasterizer.rasterize(pdfBytes, dpi: _dpi)) {
+    await for (final page in rasterizer.rasterize(pdfBytes, dpi: dpi ?? _dpi)) {
       pageNo++;
-      document.add(_encoder.encodePage(page));
+      document.add(encoder.encodePage(page));
       yield PrintProgress(PrintStage.encoding, page: pageNo);
     }
     if (pageNo == 0) {

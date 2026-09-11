@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] — 2026-09-11
+
+### Added
+
+- **Resolution negotiation data source**: the probe request set now includes
+  `printer-resolution-supported` / `-default` (10 attributes), surfaced on
+  `PrinterInfo` as `resolutionsSupported` / `resolutionDefault`. Real-printer
+  context (EPSON L3250, 2026-09): the host previously rasterized at a
+  hard-coded 300 dpi that is **not** in the printer's declared set
+  (`360x360dpi`, `1440x720dpi`) — lenient printers accept it, strict ones may
+  reject or mis-render. Hosts should pick the closest declared symmetric dpi.
+- **`printPdf(dpi: …)`**: per-call dpi override for the PWG page header
+  (`cupsHWResolution` / `PageSize` scaling); `null` (default) keeps the
+  constructor value.
+
+### Fixed
+
+- `PrinterCapabilities.name` documentation: real-device finding — EPSON
+  returns the URI path fragment (`ipp/print`) as `printer-name`; it must
+  never be used as a UI display name (use the mDNS instance name or
+  `printer-info`).
+
 ## [0.3.0] — 2026-09-11
 
 ### Added

@@ -107,6 +107,8 @@ class PrinterInfo {
     this.colorModeDefault,
     this.sidesSupported = const <String>[],
     this.sidesDefault,
+    this.resolutionsSupported = const <String>[],
+    this.resolutionDefault,
   });
 
   /// 综合能力等级（TXT 与 IPP 双源交叉验证后的结论）。
@@ -139,6 +141,17 @@ class PrinterInfo {
 
   /// 打印机默认双面模式（`sides-default`）；null = 未声明。
   final String? sidesDefault;
+
+  /// 打印机声明支持的分辨率（`printer-resolution-supported`，格式化
+  /// `横x纵单位`，如 `360x360dpi`；RFC 8011 §5.1.14 resolution 语法）。
+  ///
+  /// 供宿主在栅格化前协商 dpi：**下发值应取自该列表**（否则属请求
+  /// 打印机做未声明之事，宽容机型接受、严格机型可能拒收或异常渲染）。
+  /// 空 = 未声明。
+  final List<String> resolutionsSupported;
+
+  /// 打印机默认分辨率（`printer-resolution-default`）；null = 未声明。
+  final String? resolutionDefault;
 
   /// 是否可由本包直连打印。
   bool get isDirectPrintable => capability == PrinterCapability.ippDirect;
@@ -180,6 +193,10 @@ class PrinterCapabilities {
   });
 
   /// `printer-name`（必返属性，RFC 8011 §5.4.4；null = 打印机未按请求返回）。
+  ///
+  /// ⚠️ 真机事实（L3250，2026-09）：EPSON 返回 URI 路径片段 `ipp/print`
+  /// 而非人类可读名——厂商实现各异，**不可当 UI 显示名**；显示名应使用
+  /// mDNS 实例名（[DiscoveredPrinter.name]）或 `printer-info`。
   final String? name;
 
   /// `printer-info`（人类可读描述）。

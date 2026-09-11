@@ -155,8 +155,13 @@ if (status == PrinterProbeStatus.ready) {
 |---|---|
 | `colorModesSupported` / `colorModeDefault` | `print-color-mode-supported` / `-default` |
 | `sidesSupported` / `sidesDefault` | `sides-supported` / `-default` |
+| `resolutionsSupported` / `resolutionDefault` | `printer-resolution-supported` / `-default`（0.3.1） |
 
 工程纪律：能力只来自 IPP 确定性字段，**禁止按机型推断**。
+
+栅格化 dpi 应从 `resolutionsSupported` 协商：历史硬编码 300dpi **并非**
+所有打印机的声明值（L3250 真机事实：仅声明 `360x360dpi` / `1440x720dpi`）。
+`printPdf(dpi: …)` 可按次覆盖 PWG 页头分辨率。
 
 ### iOS 宿主配置
 

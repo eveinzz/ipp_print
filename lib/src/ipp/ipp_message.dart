@@ -109,7 +109,8 @@ class IppCodec {
     return b.take();
   }
 
-  /// probe() 兼容集（0.2 起的 8 属性，真机验证路径不变）。
+  /// probe() 兼容集（0.2 起 8 属性；0.3.1 加分辨率协商数据源 → 10 属性，
+  /// 真机路径已验证入门机不截断）。
   static const List<String> defaultCapabilityAttributeSet = [
     'media-supported',
     'document-format-supported',
@@ -119,6 +120,8 @@ class IppCodec {
     'print-color-mode-default',
     'sides-supported',
     'sides-default',
+    'printer-resolution-supported',
+    'printer-resolution-default',
   ];
 
   /// 能力引擎完整集（0.3 inspect()；全部为 RFC 8011 §5.4 定义的

@@ -157,9 +157,15 @@ declares support for**:
 |---|---|
 | `colorModesSupported` / `colorModeDefault` | `print-color-mode-supported` / `-default` |
 | `sidesSupported` / `sidesDefault` | `sides-supported` / `-default` |
+| `resolutionsSupported` / `resolutionDefault` | `printer-resolution-supported` / `-default` (0.3.1) |
 
 Engineering rule: capabilities come from deterministic IPP fields only —
 **never inferred from the printer model**.
+
+Raster dpi should be negotiated from `resolutionsSupported`: the historical
+hard-coded 300 dpi is **not** in every printer's declared set (real-device
+finding on the EPSON L3250: only `360x360dpi` / `1440x720dpi` are declared).
+`printPdf(dpi: …)` overrides the PWG page-header resolution per call.
 
 ### iOS host requirements
 
