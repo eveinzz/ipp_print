@@ -97,7 +97,7 @@ Mopria 官方数据（2026-09 核验）：超过 1.2 亿台认证打印机、10,
 - [x] `vendorOnly` 注释精确化：语义是「本包不可达」（无可直连栅格路径），
   而非「仅厂商私有」——仅声明 IPP+PDF 的设备同样归此类。
 
-### 0.4.0 — Document Pipeline（骨架已交付 2026-09-11，进行中）
+### 0.4.0 — Document Pipeline（已交付，2026-09-11；遗留项处置见下）
 
 核心目标：**让 `ipp_print` 自己决定「怎么打印」。**
 
@@ -120,14 +120,25 @@ Mopria 官方数据（2026-09 核验）：超过 1.2 亿台认证打印机、10,
   直投分支 document-format 取打印机声明原样；栅格回退分支仅支持 PDF 源
   （非 PDF 无编码器 → 如实拒绝）；`printPdf()` 转调 `print()`，行为增强为
   「声明集权威下发 document-format」（原硬编码 pwg-raster，多一次查询）。
-- [ ] 能力模型升级（外部复核采纳项）：`enum PrinterCapability`（4 值）
+- [x] 能力模型升级（外部复核采纳项）：`enum PrinterCapability`（4 值）
   → 结构化能力集（protocol/document/coverage 维度），路由从「设备属于
   哪一类」改为「具备哪些能力」——仅声明 IPP+PDF 的设备不应被整包拒绝。
-- [ ] Typed value layer（三方终版评估采纳项，经源码核实为真实缺口）：
+  **（0.5.0 以「Gate 事实化」实质完成并取代原形式：print/submit 仅拒
+  unknown，vendorOnly/airPrint 一律放行至实时能力查询 + 协商器终审；
+  结构化能力集即 Contract v1 的 `PrinterCapabilities`（24 项确定性
+  自报属性）+ `DocumentFormatNegotiator` 事实驱动路由。4 值 enum 仅保留
+  TXT 否定门职责，不再承担路由。）**
+- [x] Typed value layer（三方终版评估采纳项，经源码核实为真实缺口）：
   现 `IppValue` 仅 tag+raw+`asString`/`asInt`，boolean/rangeOfInteger/
   resolution 为 inspect 内定制解码——需上收为泛型类型层并补
   dateTime（0x31）/collection（0x34 系列）/text-vs-name 语义区分，
   否则 `media-col-database`/`media-size-supported` 将退化为手工解 raw bytes。
+  **（主体 0.5.0 交付：`asBool`/`asRange`/`asResolution`/`asKeyword` +
+  `IppResolution`，inspect 定制解码全部上收。剩余 dateTime/collection/
+  text-vs-name 三语法**显式降级至 0.8.x 候选**（见下）——内核当前
+  消费路径（documentFormats/media/colorMode/sides/resolution/copies）
+  无 collection 属性消费点，无场景牵引不做；CORE FREEZE 后按
+  additive-only 准入。）**
 
 ### 0.4.1 — Protocol & Contract Correctness（已交付，2026-09-11）
 
@@ -218,6 +229,12 @@ job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收�
 
 ### 0.8.x+ — 候选增强（封板后，additive-only）
 
+- [ ] `IppValue` 补齐 IPP 值语法：`dateTime`（0x31，RFC 8011 §5.1.13）、
+  `collection`（0x34 begCollection / 0x35 endCollection /
+  0x36 valueCollection / 0x37 memberName，§5.1.16——`media-col-database` /
+  `media-size-supported` 的载体）、text-vs-name（0x41/0x45 vs 0x42/0x46）
+  语义区分。准入条件：内核出现真实消费路径（如 media-col 打印），
+  无场景牵引不做（0.7.0 封板裁决的遗留项显式迁移）。
 - [ ] `Stream<PrinterDiscoveryEvent>` 流式发现（printerAdded/Updated/Removed；
   iOS 侧 delegate 强持有模型——ARC 教训在长驻监听场景会放大）。
 - [ ] `IppPrint.diagnose()` → `DiagnosticReport`：Discovery/DNS-SD/Network/TLS/
