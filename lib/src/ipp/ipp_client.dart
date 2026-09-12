@@ -108,7 +108,7 @@ class IppClient {
     final request = await _http.postUrl(httpEndpoint);
     request.headers.set(HttpHeaders.contentTypeHeader, 'application/ipp');
     request.headers.set(HttpHeaders.acceptEncodingHeader, 'identity');
-    request.headers.set(HttpHeaders.userAgentHeader, 'ipp_print/0.6');
+    request.headers.set(HttpHeaders.userAgentHeader, 'ipp_print/0.7');
     request.headers.contentLength = ippBody.length;
     request.add(ippBody);
     final response = await request.close();

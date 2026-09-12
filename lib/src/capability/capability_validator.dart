@@ -18,7 +18,8 @@ class CapabilityValidator {
   ///
   /// 返回 [PrintValidationResult]：valid=false 时 [PrintValidationResult
   /// .unsupportedAttributes] 列出未通过的 job template 属性名
-  /// （media / print-color-mode / sides / printer-resolution / copies）。
+  /// （media / print-color-mode / sides / printer-resolution / copies /
+  /// print-quality）。
   /// statusCode 恒 0x0000（本地预检无设备应答）。
   static PrintValidationResult validate({
     required PrintTicket ticket,
@@ -56,6 +57,12 @@ class CapabilityValidator {
         (copies < capabilities.copiesMin! ||
             copies > capabilities.copiesMax!)) {
       unsupported.add('copies');
+    }
+    final printQuality = ticket.printQuality;
+    if (printQuality != null &&
+        capabilities.printQualitiesSupported.isNotEmpty &&
+        !capabilities.printQualitiesSupported.contains(printQuality)) {
+      unsupported.add('print-quality');
     }
     return PrintValidationResult(
       valid: unsupported.isEmpty,

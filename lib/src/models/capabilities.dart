@@ -95,6 +95,8 @@ class PrinterCapabilities {
     this.copiesMin,
     this.copiesMax,
     this.finishingsSupported = const <int>[],
+    this.printQualitiesSupported = const <int>[],
+    this.printQualityDefault,
     this.ippVersionsSupported = const <String>[],
     this.operationsSupported = const <int>[],
     this.jobCreationAttributesSupported = const <String>[],
@@ -168,6 +170,13 @@ class PrinterCapabilities {
   /// `finishings-supported`（1setOf type2 **enum**，RFC 8011 §5.2.6：
   /// 3=none、4=staple…；原始 enum 值，不猜测映射语义）。
   final List<int> finishingsSupported;
+
+  /// `print-quality-supported`（1setOf type2 **enum**，RFC 8011 §5.2.13：
+  /// 3=draft、4=normal、5=high；原始 enum 值，厂商扩展原样透出）。
+  final List<int> printQualitiesSupported;
+
+  /// `print-quality-default`（原始 enum 值；null = 未声明）。
+  final int? printQualityDefault;
 
   /// `ipp-versions-supported`（如 `1.1`）。
   final List<String> ippVersionsSupported;

@@ -13,7 +13,7 @@ import 'ipp_wire_fixtures.dart';
 /// - URI 本身即 IPP endpoint 存在性证据（用户断言）——**绕过 TXT 分类
 ///   否定门**，能力判定交给 probe / print 的实时查询 + 协商器（probe 驱动）；
 /// - 端点解析诚实：scheme 白名单、无 query/fragment、缺省端口按
-///   RFC 2910/7472（ipp/ipps = 631）与 HTTP 标准（80/443）；
+///   RFC 8010 §4.1 / RFC 7472（ipp/ipps = 631）与 HTTP 标准（80/443）；
 /// - 非 manual 的发现打印机仍受 TXT 门约束（既有锚点不放松）。
 void main() {
   group('addEndpoint URI 解析（诚实解析，不猜）', () {
@@ -41,7 +41,7 @@ void main() {
       expect(p.name, contains('192.168.1.50'));
     });
 
-    test('缺省端口：ipp/ipps = 631（RFC 2910/7472），http/https = 80/443', () {
+    test('缺省端口：ipp/ipps = 631（RFC 8010 §4.1 / RFC 7472），http/https = 80/443', () {
       expect(
           IppPrint()
               .addEndpoint(Uri.parse('ipp://192.168.1.50/ipp/print'))

@@ -25,6 +25,7 @@ class PrintOptions {
     this.duplex,
     this.fidelity,
     this.resolution,
+    this.printQuality,
   });
 
   /// 打印份数（job 属性 `copies`，integer）。
@@ -64,6 +65,15 @@ class PrintOptions {
   /// `printer-resolution-supported` 协商结果（0.3.1）；构造便利入口见
   /// [PrintTicket]（keyword 形态 `360x360dpi`）。
   final (int, int, int)? resolution;
+
+  /// 打印质量（job 属性 `print-quality`，RFC 8011 §5.2.13 type2 enum，
+  /// RECOMMENDED）；null = 不下发。
+  ///
+  /// **原始 enum 值透出**（与 finishings 同纪律）：RFC 8011 Table 12 定义
+  /// 标准值 3=draft / 4=normal / 5=high，厂商扩展值原样下发。显式指定时
+  /// 取值须为 `print-quality-supported` 声明集成员。注意 §5.2.12/§5.2.13
+  /// Note：与 `printer-resolution` 冲突时 Printer SHOULD 以本属性为准。
+  final int? printQuality;
 }
 
 /// 一页栅格位图（24 位 sRGB，逐行无填充 RGBRGB...）。

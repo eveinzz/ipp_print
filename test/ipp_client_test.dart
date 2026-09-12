@@ -160,11 +160,11 @@ Uint8List _printerAttributesResponse() => _wrap(
           _attr(0x44, 'sides-supported', _s('one-sided')) +
           _raw(0x44, _s('two-sided-long-edge')) +
           _attr(0x44, 'sides-default', _s('one-sided')) +
-          // 分辨率协商（0.3.1；resolution 语法 RFC 8011 §5.1.14）
-          _attr(0x35, 'printer-resolution-supported',
+          // 分辨率协商（0.3.1；resolution 语法 RFC 8011 §5.1.16，tag 0x32）
+          _attr(0x32, 'printer-resolution-supported',
               [..._i32(360), ..._i32(360), 3]) +
-          _raw(0x35, [..._i32(1440), ..._i32(720), 3]) +
-          _attr(0x35, 'printer-resolution-default',
+          _raw(0x32, [..._i32(1440), ..._i32(720), 3]) +
+          _attr(0x32, 'printer-resolution-default',
               [..._i32(360), ..._i32(360), 3]),
     );
 
@@ -393,10 +393,11 @@ void main() {
       _attr(0x44, 'print-color-mode-default', _s('auto')),
       _attr(0x44, 'sides-supported', _s('one-sided')),
       _attr(0x44, 'sides-default', _s('one-sided')),
-      // resolution 语法：cross(i32)+feed(i32)+unit(3=dpi)，RFC 8011 §5.1.14
-      _attr(0x35, 'printer-resolution-supported', res(300, 300, 3)) +
-          _raw(0x35, res(600, 600, 3)),
-      _attr(0x35, 'printer-resolution-default', res(300, 300, 3)),
+      // resolution 语法：cross(i32)+feed(i32)+unit(3=dpi)，RFC 8011 §5.1.16；
+      // 值 tag = 0x32（RFC 8010 Table 1：0x35 是 textWithLanguage，勿混用）
+      _attr(0x32, 'printer-resolution-supported', res(300, 300, 3)) +
+          _raw(0x32, res(600, 600, 3)),
+      _attr(0x32, 'printer-resolution-default', res(300, 300, 3)),
       // rangeOfInteger 语法：两个 i32，RFC 8011 §5.1.14
       _attr(0x33, 'copies-supported', range(1, 99)),
       // finishings-supported = 1setOf type2 enum（RFC 8011 §5.2.6）

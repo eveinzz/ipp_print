@@ -228,12 +228,12 @@ List<int> _respKw(String name, String value) {
   ];
 }
 
-/// resolution 语法属性（RFC 8011 §5.1.14：cross(i32)+feed(i32)+unit，
-/// 3=dpi，共 9 字节值）。
+/// resolution 语法属性（RFC 8011 §5.1.16：cross(i32)+feed(i32)+unit，
+/// 3=dpi，共 9 字节值；值 tag 0x32）。
 List<int> _respRes(String name, int cross, int feed) {
   final nb = name.codeUnits;
   return [
-    0x35, (nb.length >> 8) & 0xFF, nb.length & 0xFF, ...nb, 0, 9,
+    0x32, (nb.length >> 8) & 0xFF, nb.length & 0xFF, ...nb, 0, 9,
     (cross >> 24) & 0xFF, (cross >> 16) & 0xFF, (cross >> 8) & 0xFF, cross,
     (feed >> 24) & 0xFF, (feed >> 16) & 0xFF, (feed >> 8) & 0xFF, feed,
     3,

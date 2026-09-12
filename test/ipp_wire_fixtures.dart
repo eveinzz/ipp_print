@@ -79,6 +79,22 @@ List<int> kwMore(String value) {
   ];
 }
 
+/// type2 enum 值（value-tag 0x23；print-quality/finishings 等的载体）。
+List<int> enumAttr(String name, int v) {
+  final nb = name.codeUnits;
+  return [
+    0x23,
+    (nb.length >> 8) & 0xFF, nb.length & 0xFF, ...nb,
+    0x00, 0x04, (v >> 24) & 0xFF, (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF,
+  ];
+}
+
+/// 同名多值的后续 enum 值（零长度名，RFC 8010 §3.1.5）。
+List<int> enumMore(int v) => [
+      0x23, 0x00, 0x00,
+      0x00, 0x04, (v >> 24) & 0xFF, (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF,
+    ];
+
 List<int> intAttr(String name, int v) {
   final nb = name.codeUnits;
   return [

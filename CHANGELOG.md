@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] — 2026-09-12
+
+CORE FREEZE 下的协议正确性补齐：print-quality（准入唯一标准 = IPP 内核
+本身缺失的协议能力）。
+
+### Added
+
+- **`print-quality` job template 属性（RFC 8011 §5.2.13，type2 enum，
+  RECOMMENDED）**：`PrintOptions` / `PrintTicket` 新增 `printQuality`
+  （null = 不下发，既有作业字节零变化；原始 enum 值透出——Table 12 标准
+  值 3=draft / 4=normal / 5=high，厂商扩展值原样下发，与 finishings 同
+  纪律）；Print-Job / Validate-Job / Create-Job 经 `_writeJobTemplate`
+  单一来源同构下发。
+- `PrinterCapabilities.printQualitiesSupported` / `printQualityDefault`
+  （inspect 请求集 24 → 26 属性；lenient 解析，缺失 = 空/null 不推断）。
+- `CapabilityValidator` 本地预检补 print-quality ∈ 声明集校验
+  （声明缺失跳过，缺≠不支持）。
+- 测试锚点 8 例（wire 三操作同构 / inspect 解析 / validator / 往返），
+  敏感性验证：停用下发路径 → 2 例线格式锚点转红。
+
+### Fixed
+
+- 测试 fixture resolution 值 tag 0x35（textWithLanguage）→ 0x32
+  （resolution，RFC 8010 Table 1）——解析器 tag 无关，锚点弱化而非断裂。
+- 引用残留清扫：端口出处 RFC 2910/7472 → RFC 8010 §4.1 / RFC 7472
+  （2 处）；resolution 节号 §5.1.14 → §5.1.16（3 处注释）。
+- User-Agent `ipp_print/0.6` → `ipp_print/0.7`（0.7.0 期间漂移复发）。
+
 ## [0.7.0] — 2026-09-11
 
 Access & CORE FREEZE：补最后一个入口缺口（手动直连），内核封板。

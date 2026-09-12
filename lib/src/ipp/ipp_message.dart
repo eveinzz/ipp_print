@@ -153,11 +153,13 @@ class IppCodec {
     'print-color-mode-default',
     'sides-supported',
     'sides-default',
-    // 分辨率 / 份数 / 整饰
+    // 分辨率 / 份数 / 整饰 / 质量
     'printer-resolution-supported',
     'printer-resolution-default',
     'copies-supported',
     'finishings-supported',
+    'print-quality-supported',
+    'print-quality-default',
     // 协议面
     'ipp-versions-supported',
     'operations-supported',
@@ -213,6 +215,10 @@ class IppCodec {
     final res = options.resolution;
     if (res != null) {
       b.attr(tagResolution, 'printer-resolution', res);
+    }
+    // 打印质量（RFC 8011 §5.2.13 type2 enum；0.7.1 新增）。
+    if (options.printQuality != null) {
+      b.attr(tagEnum, 'print-quality', options.printQuality!);
     }
   }
 

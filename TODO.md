@@ -227,6 +227,24 @@ job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收�
   - 流式发现、Diagnostics、NWBrowser/NsdManager 迁移（双触发条件保留）
     全部移入 0.8.x+ 候选，additive-only 演进，永不阻塞上层。
 
+### 0.7.1 — print-quality（封板后首个协议正确性补丁，2026-09-12）
+
+准入依据：CORE FREEZE「IPP 内核本身缺失的协议能力」。RFC 8011 §5.2.13
+（type2 enum，RECOMMENDED；Table 12：'3'=draft / '4'=normal / '5'=high）；
+§5.2.12/§5.2.13 Note：与 `printer-resolution` 冲突时 Printer SHOULD 以
+`print-quality` 为准——仅下发分辨率等于把输出质量决定权让给打印机默认。
+
+- [x] `print-quality` 下发（`PrintOptions`/`PrintTicket.printQuality`，
+  null 不下发既有作业字节零变化，原始 enum 值透出与 finishings 同纪律）
+  + inspect 请求集 24 → 26（`print-quality-supported`/`-default`）+
+  CapabilityValidator 本地预检 + wire/解析/校验/往返 8 例锚点
+  （敏感性验证：停用下发 → 2 例线格式锚点转红）。
+- 同轮收口（验收审计发现）：测试 fixture resolution 值 tag 0x35
+  （textWithLanguage）→ 0x32（resolution，RFC 8010 Table 1，解析器
+  tag 无关故锚点弱化而非断裂）；引用残留 5 处（端口出处 RFC 2910/7472
+  → RFC 8010 §4.1 / RFC 7472 ×2；resolution 节号 §5.1.14 → §5.1.16
+  注释 ×3）；UA 版本串漂移复发（0.6 → 0.7）。
+
 ### 0.8.x+ — 候选增强（封板后，additive-only）
 
 - [ ] `IppValue` 补齐 IPP 值语法：`dateTime`（0x31，RFC 8011 §5.1.15）、

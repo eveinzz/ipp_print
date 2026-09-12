@@ -116,6 +116,8 @@ extension PrinterInspect on IppClient {
       copiesMin: copies?.$1,
       copiesMax: copies?.$2,
       finishingsSupported: _intsOf(g, 'finishings-supported'),
+      printQualitiesSupported: _intsOf(g, 'print-quality-supported'),
+      printQualityDefault: _intOf(g, 'print-quality-default'),
       ippVersionsSupported: _keywords(g, 'ipp-versions-supported'),
       operationsSupported: _intsOf(g, 'operations-supported'),
       jobCreationAttributesSupported:
@@ -147,8 +149,8 @@ int? _enumOf(IppGroup? g, String name) {
   return values.first.asInt;
 }
 
-int? _intOf(IppGroup g, String name) {
-  final values = g.attributes[name];
+int? _intOf(IppGroup? g, String name) {
+  final values = g?.attributes[name];
   if (values == null || values.isEmpty) return null;
   return values.first.asInt;
 }

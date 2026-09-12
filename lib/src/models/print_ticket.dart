@@ -21,6 +21,7 @@ class PrintTicket {
     this.resolution,
     this.copies,
     this.fidelity,
+    this.printQuality,
   });
 
   /// 从传输便利层构造（printPdf 旧调用方的迁移路径）。
@@ -33,6 +34,7 @@ class PrintTicket {
             : _resolutionToKeyword(o.resolution!),
         copies: o.copies,
         fidelity: o.fidelity,
+        printQuality: o.printQuality,
       );
 
   /// PWG 介质自描述名（job 属性 `media`；null = 打印机默认）。
@@ -54,6 +56,10 @@ class PrintTicket {
   /// 属性保真语义（`ipp-attribute-fidelity`；null = 尽力打印）。
   final PrintFidelity? fidelity;
 
+  /// 打印质量（`print-quality`，RFC 8011 §5.2.13 原始 enum：
+  /// 3=draft/4=normal/5=high；null = 打印机默认）。
+  final int? printQuality;
+
   /// 转传输便利层（print() 内部下发路径）。resolution 由 keyword 形态
   /// 解析为线格式 record；非法 keyword 抛 [ArgumentError]（程序员错误）。
   PrintOptions toOptions() => PrintOptions(
@@ -63,6 +69,7 @@ class PrintTicket {
         duplex: sides,
         fidelity: fidelity,
         resolution: resolution == null ? null : _parseResolution(resolution!),
+        printQuality: printQuality,
       );
 }
 

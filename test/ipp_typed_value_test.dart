@@ -35,7 +35,7 @@ void main() {
     });
   });
 
-  group('IppValue.asResolution（RFC 8011 §5.1.14）', () {
+  group('IppValue.asResolution（RFC 8011 §5.1.16）', () {
     test('cross+feed+unit 9 字节 → 结构化 + keyword 形态', () {
       // 360x360dpi（L3250 声明项）
       final r = v([
