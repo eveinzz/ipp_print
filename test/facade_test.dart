@@ -49,8 +49,12 @@ Uint8List _resp(int status, int groupTag, List<int> attrs) {
     final nb = name.codeUnits;
     return [
       tag,
-      (nb.length >> 8) & 0xFF, nb.length & 0xFF, ...nb,
-      (value.length >> 8) & 0xFF, value.length & 0xFF, ...value,
+      (nb.length >> 8) & 0xFF,
+      nb.length & 0xFF,
+      ...nb,
+      (value.length >> 8) & 0xFF,
+      value.length & 0xFF,
+      ...value,
     ];
   }
 
@@ -73,8 +77,7 @@ const _l3250Txt = {
       'application/vnd.epson.escpr',
 };
 
-DiscoveredPrinter _printer(Map<String, String> txt) =>
-    DiscoveredPrinter(
+DiscoveredPrinter _printer(Map<String, String> txt) => DiscoveredPrinter(
       name: 'EPSON L3250 Series',
       host: '192.168.0.106',
       port: 631,
@@ -112,8 +115,8 @@ void main() {
     });
     final ipp = IppPrint(discovery: _FakeDiscovery(), client: client);
     PrinterInfo? info;
-    final status = await ipp.probe(_printer(_l3250Txt),
-        onInfo: (i) => info = i);
+    final status =
+        await ipp.probe(_printer(_l3250Txt), onInfo: (i) => info = i);
     expect(status, PrinterProbeStatus.ready);
     expect(info!.mediaSupported, ['iso_a4_210x297mm']);
     // 能力协商透出：宿主 UI 据此生成色彩/双面可选项
@@ -141,8 +144,8 @@ void main() {
     });
     final ipp = IppPrint(discovery: _FakeDiscovery(), client: client);
     PrinterInfo? info;
-    final status = await ipp.probe(_printer(_l3250Txt),
-        onInfo: (i) => info = i);
+    final status =
+        await ipp.probe(_printer(_l3250Txt), onInfo: (i) => info = i);
     expect(status, PrinterProbeStatus.unsupported);
     expect(info!.capability, PrinterCapability.vendorOnly);
   });
@@ -163,8 +166,8 @@ void main() {
     });
     final ipp = IppPrint(discovery: _FakeDiscovery(), client: client);
     final red = Uint8List.fromList([255, 0, 0, 255, 0, 0]);
-    final rasterizer = StaticRasterizer(
-        RasterPage(width: 2, height: 1, bytes: red));
+    final rasterizer =
+        StaticRasterizer(RasterPage(width: 2, height: 1, bytes: red));
 
     final stages = <PrintStage>[];
     await for (final p in ipp.printPdf(
@@ -185,46 +188,53 @@ void main() {
     expect(rasterizer.callCount, 1);
   });
 
-  test('printPdf：TXT 无 IPP 证据 → 拒绝（不发任何请求；0.5 Gate 事实化）',
-      () async {
+  test('printPdf：TXT 无 IPP 证据 → 拒绝（不发任何请求；0.5 Gate 事实化）', () async {
     final client = FakeIppClient({});
     final ipp = IppPrint(discovery: _FakeDiscovery(), client: client);
     await expectLater(
-      ipp
-          .printPdf(
-            pdfBytes: const [1],
-            printer: _printer({'ty': 'Some Printer'}),
-            rasterizer: StaticRasterizer(RasterPage(
-                width: 1, height: 1, bytes: Uint8List.fromList([0, 0, 0]))),
-          )
-          .drain<void>(),
+      ipp.printPdf(
+        pdfBytes: const [1],
+        printer: _printer({'ty': 'Some Printer'}),
+        rasterizer: StaticRasterizer(RasterPage(
+            width: 1, height: 1, bytes: Uint8List.fromList([0, 0, 0]))),
+      ).drain<void>(),
       throwsA(isA<IppUnsupportedException>()),
     );
     expect(client.operations, isEmpty);
   });
-
 }
 // —— 测试辅助：属性字节拼装（与 FakeIppClient 响应构造配套）——
 
 List<int> _respAttr(String name, int v) {
   final nb = name.codeUnits;
   return [
-    0x21, (nb.length >> 8) & 0xFF, nb.length & 0xFF, ...nb, 0, 4,
-    (v >> 24) & 0xFF, (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF,
+    0x21,
+    (nb.length >> 8) & 0xFF,
+    nb.length & 0xFF,
+    ...nb,
+    0,
+    4,
+    (v >> 24) & 0xFF,
+    (v >> 16) & 0xFF,
+    (v >> 8) & 0xFF,
+    v & 0xFF,
   ];
 }
 
-List<int> _respEnum(String name, int v) => _respAttr(name, v)
-    .map((b) => b)
-    .toList()
-  ..[0] = 0x23;
+List<int> _respEnum(String name, int v) =>
+    _respAttr(name, v).map((b) => b).toList()..[0] = 0x23;
 
 List<int> _respKw(String name, String value) {
   final nb = name.codeUnits;
   final vb = value.codeUnits;
   return [
-    0x44, (nb.length >> 8) & 0xFF, nb.length & 0xFF, ...nb,
-    (vb.length >> 8) & 0xFF, vb.length & 0xFF, ...vb,
+    0x44,
+    (nb.length >> 8) & 0xFF,
+    nb.length & 0xFF,
+    ...nb,
+    (vb.length >> 8) & 0xFF,
+    vb.length & 0xFF,
+    ...vb,
   ];
 }
 
@@ -233,9 +243,20 @@ List<int> _respKw(String name, String value) {
 List<int> _respRes(String name, int cross, int feed) {
   final nb = name.codeUnits;
   return [
-    0x32, (nb.length >> 8) & 0xFF, nb.length & 0xFF, ...nb, 0, 9,
-    (cross >> 24) & 0xFF, (cross >> 16) & 0xFF, (cross >> 8) & 0xFF, cross,
-    (feed >> 24) & 0xFF, (feed >> 16) & 0xFF, (feed >> 8) & 0xFF, feed,
+    0x32,
+    (nb.length >> 8) & 0xFF,
+    nb.length & 0xFF,
+    ...nb,
+    0,
+    9,
+    (cross >> 24) & 0xFF,
+    (cross >> 16) & 0xFF,
+    (cross >> 8) & 0xFF,
+    cross,
+    (feed >> 24) & 0xFF,
+    (feed >> 16) & 0xFF,
+    (feed >> 8) & 0xFF,
+    feed,
     3,
   ];
 }

@@ -14,7 +14,8 @@ void main() {
     });
 
     test('无 = 的段被忽略', () {
-      final txt = CapabilityClassifier.parseTxtBytes('junk\x00rp=ipp/print'.codeUnits);
+      final txt =
+          CapabilityClassifier.parseTxtBytes('junk\x00rp=ipp/print'.codeUnits);
       expect(txt.containsKey('junk'), isFalse);
       expect(txt['rp'], 'ipp/print');
     });
@@ -24,8 +25,9 @@ void main() {
     test('Epson L3250 实测 TXT（无 URF、含 pwg-raster）→ ippDirect', () {
       final txt = CapabilityClassifier.parseTxtBytes(
         'ty=EPSON L3250 Series\x00rp=ipp/print\x00'
-        'pdl=application/octet-stream,image/pwg-raster,application/vnd.epson.escpr\x00'
-        'uuid=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxbc32'.codeUnits,
+                'pdl=application/octet-stream,image/pwg-raster,application/vnd.epson.escpr\x00'
+                'uuid=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxbc32'
+            .codeUnits,
       );
       expect(CapabilityClassifier.classify(txt), PrinterCapability.ippDirect);
     });
@@ -51,8 +53,8 @@ void main() {
     });
 
     test('缺 pdl → unknown', () {
-      expect(CapabilityClassifier.classify(const {}),
-          PrinterCapability.unknown);
+      expect(
+          CapabilityClassifier.classify(const {}), PrinterCapability.unknown);
     });
 
     test('未归一键（手写 TXT）→ classify 内部防御式归一', () {
@@ -66,9 +68,7 @@ void main() {
     });
 
     test('pdl 值大小写不敏感', () {
-      expect(
-          CapabilityClassifier.classify(
-              const {'pdl': 'IMAGE/PWG-RASTER'}),
+      expect(CapabilityClassifier.classify(const {'pdl': 'IMAGE/PWG-RASTER'}),
           PrinterCapability.ippDirect);
     });
   });
@@ -88,8 +88,7 @@ void main() {
       expect(p!.host, '192.168.0.106');
       expect(p.resourcePath, '/ipp/print');
       expect(p.uuid, 'abc');
-      expect(p.ippUri.toString(),
-          'ipp://192.168.0.106:631/ipp/print');
+      expect(p.ippUri.toString(), 'ipp://192.168.0.106:631/ipp/print');
       expect(p.httpUri.scheme, 'http');
     });
 

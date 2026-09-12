@@ -27,10 +27,7 @@ extension PrinterValidate on IppClient {
       ),
     );
     final unsupported = <String>[
-      ...?res
-          .groupByTag(IppCodec.tagUnsupportedGroup)
-          ?.attributes
-          .keys,
+      ...?res.groupByTag(IppCodec.tagUnsupportedGroup)?.attributes.keys,
     ];
     return PrintValidationResult(
       valid: res.isSuccessful,

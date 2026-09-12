@@ -72,8 +72,7 @@ void main() {
     r.group(0x01);
     r.attr(0x47, 'attributes-charset', _s('utf-8'));
     r.attr(0x48, 'attributes-natural-language', _s('en'));
-    r.attr(0x45, 'printer-uri',
-        _s('ipp://EPSONBCAA32.local:631/ipp/print'));
+    r.attr(0x45, 'printer-uri', _s('ipp://EPSONBCAA32.local:631/ipp/print'));
     r.attr(0x42, 'requesting-user-name', _s('ipp_print'));
     // IPP Guide Appendix A：Print-Job 必含 job-name（默认值）。
     r.attr(0x42, 'job-name', _s('ipp_print-document'));
@@ -162,7 +161,8 @@ void main() {
     expect(actual[3], 0x0B);
   });
 
-  test('operation-id 回归锚点：Get-Job-Attributes=0x0009 ≠ Get-Jobs=0x000A'
+  test(
+      'operation-id 回归锚点：Get-Job-Attributes=0x0009 ≠ Get-Jobs=0x000A'
       '（历史 Bug：两者曾混淆，实际发送了 Get-Jobs 操作码）', () {
     expect(IppCodec.opPrintJob, 0x0002);
     expect(IppCodec.opCancelJob, 0x0008);
@@ -190,8 +190,7 @@ void main() {
     r.group(0x01);
     r.attr(0x47, 'attributes-charset', _s('utf-8'));
     r.attr(0x48, 'attributes-natural-language', _s('en'));
-    r.attr(0x45, 'printer-uri',
-        _s('ipps://EPSONBCAA32.local:631/ipp/print'));
+    r.attr(0x45, 'printer-uri', _s('ipps://EPSONBCAA32.local:631/ipp/print'));
     r.attr(0x42, 'requesting-user-name', _s('ipp_print'));
     // IPP Guide Appendix A：Cancel-Job 必需 job-id (integer)。
     r.attr(0x21, 'job-id', _i32(42));
@@ -225,8 +224,7 @@ void main() {
     expect(actual, r.out.toBytes());
   });
 
-  test('Validate-Job 请求金标：操作码 0x0004、无文档数据、与 Print-Job 同构',
-      () {
+  test('Validate-Job 请求金标：操作码 0x0004、无文档数据、与 Print-Job 同构', () {
     const options = PrintOptions(
       media: 'iso_a4_210x297mm',
       duplex: 'one-sided',
@@ -269,7 +267,8 @@ void main() {
         hasLength(IppCodec.defaultCapabilityAttributeSet.length));
   });
 
-  test('Get-Printer-Attributes：能力引擎传 fullCapabilityAttributeSet '
+  test(
+      'Get-Printer-Attributes：能力引擎传 fullCapabilityAttributeSet '
       '时逐值下发', () {
     final request = IppCodec.buildGetPrinterAttributes(
       printerUri: 'ipp://p.local:631/ipp/print',
@@ -286,9 +285,9 @@ void main() {
   test('parseResponse：解析状态码、组、多值属性与 enum/integer', () {
     // 手工构造响应头（status successful-ok，requestId 0x1234）
     final resp = BytesBuilder()
-      ..add([0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x12, 0x34])
-      ..addByte(0x01) // operation group
-      ;
+          ..add([0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x12, 0x34])
+          ..addByte(0x01) // operation group
+        ;
     void attr(int tag, String name, List<int> v) {
       resp.addByte(tag);
       final nb = name.codeUnits;
@@ -335,8 +334,8 @@ void main() {
   });
 
   group('parseResponse：截断/畸形报文（对抗性种子）', () {
-    Uint8List header() => Uint8List.fromList(
-        [0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]);
+    Uint8List header() =>
+        Uint8List.fromList([0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]);
 
     test('短于 8 字节头部 → IppPrintException（非 RangeError）', () {
       expect(
@@ -347,12 +346,12 @@ void main() {
 
     test('属性名长度越界（截断）→ IppPrintException', () {
       final b = BytesBuilder()
-        ..add(header())
-        ..addByte(0x01)
-        ..addByte(0x44)
-        ..addByte(0x00)
-        ..addByte(0x20) // 声称名字长 32 字节，但报文到此结束
-        ;
+            ..add(header())
+            ..addByte(0x01)
+            ..addByte(0x44)
+            ..addByte(0x00)
+            ..addByte(0x20) // 声称名字长 32 字节，但报文到此结束
+          ;
       expect(
         () => IppCodec.parseResponse(b.toBytes()),
         throwsA(isA<IppPrintException>()),
@@ -362,15 +361,15 @@ void main() {
     test('属性值长度越界（截断）→ IppPrintException', () {
       final nb = 'media'.codeUnits;
       final b = BytesBuilder()
-        ..add(header())
-        ..addByte(0x01)
-        ..addByte(0x44)
-        ..addByte(0x00)
-        ..addByte(nb.length)
-        ..add(nb)
-        ..addByte(0x00)
-        ..addByte(0x40) // 声称值长 64 字节，实际 0
-        ;
+            ..add(header())
+            ..addByte(0x01)
+            ..addByte(0x44)
+            ..addByte(0x00)
+            ..addByte(nb.length)
+            ..add(nb)
+            ..addByte(0x00)
+            ..addByte(0x40) // 声称值长 64 字节，实际 0
+          ;
       expect(
         () => IppCodec.parseResponse(b.toBytes()),
         throwsA(isA<IppPrintException>()),
@@ -427,11 +426,9 @@ void main() {
           reason: 'UTF-16 码元直写不得再出现');
     });
 
-    test('parseResponse：UTF-8 中文值正确解码（name 语法，中文 printer-info）',
-        () {
+    test('parseResponse：UTF-8 中文值正确解码（name 语法，中文 printer-info）', () {
       final parsed = IppCodec.parseResponse(_utf8Resp(
-        _utf8Attr(0x42, 'printer-make-and-model',
-            utf8.encode('爱普生 L3250 系列')),
+        _utf8Attr(0x42, 'printer-make-and-model', utf8.encode('爱普生 L3250 系列')),
       ));
       expect(parsed.firstValue('printer-make-and-model')!.asString,
           '爱普生 L3250 系列');
@@ -466,8 +463,12 @@ List<int> _utf8Attr(int tag, String name, List<int> value) {
   final nb = utf8.encode(name);
   return [
     tag,
-    (nb.length >> 8) & 0xFF, nb.length & 0xFF, ...nb,
-    (value.length >> 8) & 0xFF, value.length & 0xFF, ...value,
+    (nb.length >> 8) & 0xFF,
+    nb.length & 0xFF,
+    ...nb,
+    (value.length >> 8) & 0xFF,
+    value.length & 0xFF,
+    ...value,
   ];
 }
 

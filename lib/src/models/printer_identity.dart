@@ -81,7 +81,8 @@ class DiscoveredPrinter {
   /// 逻辑 IPP URI 字符串（保序，用于 printer-uri 属性；RFC 8011 §4.1.5
   /// 要求 scheme 恒为 ipp/ipps 逻辑 scheme，与 HTTP 传输通道无关）。
   /// Uri.toString 会把 host 归一为小写，破坏与广播记录的一致性，故不用。
-  String get ippUriString => '${secure ? 'ipps' : 'ipp'}://$host:$port$resourcePath';
+  String get ippUriString =>
+      '${secure ? 'ipps' : 'ipp'}://$host:$port$resourcePath';
 
   /// HTTP 传输地址字符串（保序；secure 时走 https）。
   String get httpUriString =>
@@ -89,12 +90,16 @@ class DiscoveredPrinter {
 
   /// 逻辑 IPP URI（按 RFC 8011 用于 printer-uri 属性）。
   Uri get ippUri => Uri(
-      scheme: secure ? 'ipps' : 'ipp', host: host, port: port,
+      scheme: secure ? 'ipps' : 'ipp',
+      host: host,
+      port: port,
       path: resourcePath);
 
   /// HTTP 传输地址（IPP over HTTP(S) 的 POST 端点）。
   Uri get httpUri => Uri(
-      scheme: secure ? 'https' : 'http', host: host, port: port,
+      scheme: secure ? 'https' : 'http',
+      host: host,
+      port: port,
       path: resourcePath);
 
   /// 稳定身份键：优先 UUID，回退到 实例名@host:port。

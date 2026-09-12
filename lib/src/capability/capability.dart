@@ -84,7 +84,9 @@ class RecordAssembler {
     final rp = txt['rp'];
     if (rp == null || rp.isEmpty) return null;
     final rawHost = r.ipv4?.address ?? target;
-    final host = rawHost.endsWith('.') ? rawHost.substring(0, rawHost.length - 1) : rawHost;
+    final host = rawHost.endsWith('.')
+        ? rawHost.substring(0, rawHost.length - 1)
+        : rawHost;
     if (host.isEmpty) return null;
     if (requireIpv4 && r.ipv4 == null) return null;
     return DiscoveredPrinter(

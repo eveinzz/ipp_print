@@ -29,7 +29,8 @@ class _Builder {
     }
     _body.addByte(tag);
     _writeName(name);
-    _writeValue(value, asInteger: tag == IppCodec.tagInteger || tag == IppCodec.tagEnum);
+    _writeValue(value,
+        asInteger: tag == IppCodec.tagInteger || tag == IppCodec.tagEnum);
     _lastName = name;
     return this;
   }
@@ -41,7 +42,8 @@ class _Builder {
     _body
       ..addByte(0)
       ..addByte(0);
-    _writeValue(value, asInteger: tag == IppCodec.tagInteger || tag == IppCodec.tagEnum);
+    _writeValue(value,
+        asInteger: tag == IppCodec.tagInteger || tag == IppCodec.tagEnum);
     return this;
   }
 
@@ -70,8 +72,7 @@ class _Builder {
       bd.setInt32(4, value.$2, Endian.big);
       vb[8] = value.$3;
     } else if (asInteger && value is int) {
-      vb = Uint8List(4)
-        ..buffer.asByteData().setInt32(0, value, Endian.big);
+      vb = Uint8List(4)..buffer.asByteData().setInt32(0, value, Endian.big);
     } else {
       // RFC 8011：文本类值（text/name/keyword/uri…）按 UTF-8 编码。
       // （0.4.1 修复：原 codeUnits 对非 ASCII 值（如中文 job-name）编出坏字节。）

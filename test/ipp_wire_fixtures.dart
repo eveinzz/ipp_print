@@ -43,8 +43,12 @@ Uint8List resp(int status, int groupTag, List<int> attrs) {
     final nb = name.codeUnits;
     return [
       tag,
-      (nb.length >> 8) & 0xFF, nb.length & 0xFF, ...nb,
-      (value.length >> 8) & 0xFF, value.length & 0xFF, ...value,
+      (nb.length >> 8) & 0xFF,
+      nb.length & 0xFF,
+      ...nb,
+      (value.length >> 8) & 0xFF,
+      value.length & 0xFF,
+      ...value,
     ];
   }
 
@@ -65,8 +69,12 @@ List<int> kw(String name, String value) {
   final vb = value.codeUnits;
   return [
     0x44,
-    (nb.length >> 8) & 0xFF, nb.length & 0xFF, ...nb,
-    (vb.length >> 8) & 0xFF, vb.length & 0xFF, ...vb,
+    (nb.length >> 8) & 0xFF,
+    nb.length & 0xFF,
+    ...nb,
+    (vb.length >> 8) & 0xFF,
+    vb.length & 0xFF,
+    ...vb,
   ];
 }
 
@@ -74,8 +82,12 @@ List<int> kw(String name, String value) {
 List<int> kwMore(String value) {
   final vb = value.codeUnits;
   return [
-    0x44, 0x00, 0x00,
-    (vb.length >> 8) & 0xFF, vb.length & 0xFF, ...vb,
+    0x44,
+    0x00,
+    0x00,
+    (vb.length >> 8) & 0xFF,
+    vb.length & 0xFF,
+    ...vb,
   ];
 }
 
@@ -84,23 +96,44 @@ List<int> enumAttr(String name, int v) {
   final nb = name.codeUnits;
   return [
     0x23,
-    (nb.length >> 8) & 0xFF, nb.length & 0xFF, ...nb,
-    0x00, 0x04, (v >> 24) & 0xFF, (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF,
+    (nb.length >> 8) & 0xFF,
+    nb.length & 0xFF,
+    ...nb,
+    0x00,
+    0x04,
+    (v >> 24) & 0xFF,
+    (v >> 16) & 0xFF,
+    (v >> 8) & 0xFF,
+    v & 0xFF,
   ];
 }
 
 /// 同名多值的后续 enum 值（零长度名，RFC 8010 §3.1.5）。
 List<int> enumMore(int v) => [
-      0x23, 0x00, 0x00,
-      0x00, 0x04, (v >> 24) & 0xFF, (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF,
+      0x23,
+      0x00,
+      0x00,
+      0x00,
+      0x04,
+      (v >> 24) & 0xFF,
+      (v >> 16) & 0xFF,
+      (v >> 8) & 0xFF,
+      v & 0xFF,
     ];
 
 List<int> intAttr(String name, int v) {
   final nb = name.codeUnits;
   return [
     0x21,
-    (nb.length >> 8) & 0xFF, nb.length & 0xFF, ...nb,
-    0x00, 0x04, (v >> 24) & 0xFF, (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF,
+    (nb.length >> 8) & 0xFF,
+    nb.length & 0xFF,
+    ...nb,
+    0x00,
+    0x04,
+    (v >> 24) & 0xFF,
+    (v >> 16) & 0xFF,
+    (v >> 8) & 0xFF,
+    v & 0xFF,
   ];
 }
 

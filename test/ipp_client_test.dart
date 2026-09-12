@@ -41,8 +41,8 @@ class FakeIppServer {
         return;
       }
       if (bytes.length < headerEnd + contentLength) return;
-      final body = Uint8List.sublistView(
-          bytes, headerEnd, headerEnd + contentLength);
+      final body =
+          Uint8List.sublistView(bytes, headerEnd, headerEnd + contentLength);
       _requests.add(Uint8List.fromList(body));
       // 预排的原始 HTTP 响应优先（用于模拟 5xx/404 等传输层场景）。
       final raw = _pendingHttp.isEmpty ? null : _pendingHttp.removeAt(0);
@@ -66,7 +66,8 @@ class FakeIppServer {
 
   int _findHeaderEnd(List<int> bytes) {
     for (var i = 0; i + 3 < bytes.length; i++) {
-      if (bytes[i] == 13 && bytes[i + 1] == 10 //
+      if (bytes[i] == 13 &&
+          bytes[i + 1] == 10 //
           &&
           bytes[i + 2] == 13 &&
           bytes[i + 3] == 10) {
@@ -90,13 +91,14 @@ class FakeIppServer {
   List<int> _respond(Uint8List request) {
     final op = (request[2] << 8) | request[3];
     final pre = _pendingIpp.isEmpty ? null : _pendingIpp.removeAt(0);
-    final ipp = pre ?? switch (op) {
-      IppCodec.opPrintJob => _printJobResponse(),
-      IppCodec.opGetPrinterAttributes => _printerAttributesResponse(),
-      IppCodec.opCancelJob => _cancelJobResponse(),
-      IppCodec.opGetJobs => _getJobsResponse(),
-      _ => _jobStateResponse(),
-    };
+    final ipp = pre ??
+        switch (op) {
+          IppCodec.opPrintJob => _printJobResponse(),
+          IppCodec.opGetPrinterAttributes => _printerAttributesResponse(),
+          IppCodec.opCancelJob => _cancelJobResponse(),
+          IppCodec.opGetJobs => _getJobsResponse(),
+          _ => _jobStateResponse(),
+        };
     final head = 'HTTP/1.1 200 OK\r\n'
         'Content-Type: application/ipp\r\n'
         'Content-Length: ${ipp.length}\r\n'
@@ -109,8 +111,12 @@ List<int> _attr(int tag, String name, List<int> value) {
   final nb = name.codeUnits;
   return [
     tag,
-    (nb.length >> 8) & 0xFF, nb.length & 0xFF, ...nb,
-    (value.length >> 8) & 0xFF, value.length & 0xFF, ...value,
+    (nb.length >> 8) & 0xFF,
+    nb.length & 0xFF,
+    ...nb,
+    (value.length >> 8) & 0xFF,
+    value.length & 0xFF,
+    ...value,
   ];
 }
 
@@ -185,7 +191,8 @@ Uint8List _getJobsResponse() {
     ..add(_attr(0x47, 'attributes-charset', _s('utf-8')))
     ..add(_attr(0x48, 'attributes-natural-language', _s('en')));
   void job(int id, int state, String name, String user) {
-    b..addByte(0x02)
+    b
+      ..addByte(0x02)
       ..add(_attr(0x21, 'job-id', _i32(id)))
       ..add(_attr(0x23, 'job-state', _i32(state)))
       ..add(_attr(0x42, 'job-name', _s(name)))
@@ -221,8 +228,7 @@ void main() {
 
   test('getPrinterAttributes：解析介质/格式/状态/型号', () async {
     final attrs = await client.getPrinterAttributes(printer);
-    expect(attrs.mediaSupported,
-        ['iso_a4_210x297mm', 'na_letter_8.5x11in']);
+    expect(attrs.mediaSupported, ['iso_a4_210x297mm', 'na_letter_8.5x11in']);
     expect(attrs.documentFormats, ['image/pwg-raster']);
     expect(attrs.state, 'idle');
     expect(attrs.makeModel, 'EPSON L3250 Series');
@@ -230,8 +236,7 @@ void main() {
     expect(attrs.resolutionDefault, '360x360dpi');
   });
 
-  test('getPrinterAttributes：解析色彩/双面 supported 与 default（UI 可选项数据源）',
-      () async {
+  test('getPrinterAttributes：解析色彩/双面 supported 与 default（UI 可选项数据源）', () async {
     final attrs = await client.getPrinterAttributes(printer);
     expect(attrs.colorModesSupported, ['color', 'monochrome', 'auto']);
     expect(attrs.colorModeDefault, 'auto');
@@ -279,14 +284,12 @@ void main() {
   });
 
   test('getJobState：响应缺 job-state → unknown（不再猜 pending）', () async {
-    server.enqueueIpp(
-        _wrap(0, [0x02], _attr(0x21, 'job-id', _i32(42))));
+    server.enqueueIpp(_wrap(0, [0x02], _attr(0x21, 'job-id', _i32(42))));
     final state = await client.getJobState(printer, 42);
     expect(state, IppJobState.unknown);
   });
 
-  test('打印机不可达 → SocketException（离线语义，供 probe 映射 offline）',
-      () async {
+  test('打印机不可达 → SocketException（离线语义，供 probe 映射 offline）', () async {
     final bad = DiscoveredPrinter(
       name: 'x',
       host: '127.0.0.1',
@@ -319,8 +322,7 @@ void main() {
     expect(req, contains(42)); // _i32(42) 出现在报文中
   });
 
-  test('cancelJob：作业不存在（client-error-not-found）→ IppStatusException',
-      () async {
+  test('cancelJob：作业不存在（client-error-not-found）→ IppStatusException', () async {
     server.enqueueHttp(
       _httpResponse(_wrap(0x0406, [0x02], const <int>[])),
     );
@@ -345,20 +347,22 @@ void main() {
         IppCodec.opGetJobs);
   });
 
-  test('getJobs：缺 job-id/job-state 的脏组被跳过（不再静默 0/pending）',
-      () async {
+  test('getJobs：缺 job-id/job-state 的脏组被跳过（不再静默 0/pending）', () async {
     final b = BytesBuilder()
       ..add([0x01, 0x01, 0x00, 0x00, 0, 0, 0, 7])
       ..addByte(0x01)
       ..add(_attr(0x47, 'attributes-charset', _s('utf-8')))
       ..add(_attr(0x48, 'attributes-natural-language', _s('en')));
-    b..addByte(0x02)
+    b
+      ..addByte(0x02)
       ..add(_attr(0x21, 'job-id', _i32(42)))
       ..add(_attr(0x23, 'job-state', _i32(5)));
     // 脏组：只有 job-name，缺 job-id 与 job-state。
-    b..addByte(0x02)
+    b
+      ..addByte(0x02)
       ..add(_attr(0x42, 'job-name', _s('dirty')));
-    b..addByte(0x02)
+    b
+      ..addByte(0x02)
       ..add(_attr(0x21, 'job-id', _i32(43)))
       ..add(_attr(0x23, 'job-state', _i32(9)));
     b.addByte(0x03);
@@ -419,8 +423,8 @@ void main() {
     expect(caps.state, 'idle');
     expect(caps.isAcceptingJobs, isTrue);
     expect(caps.stateReasons, ['none']);
-    expect(caps.documentFormats,
-        ['image/pwg-raster', 'application/octet-stream']);
+    expect(
+        caps.documentFormats, ['image/pwg-raster', 'application/octet-stream']);
     expect(caps.documentFormatDefault, 'image/pwg-raster');
     expect(caps.mediaSupported, ['iso_a4_210x297mm', 'na_letter_8.5x11in']);
     expect(caps.mediaReady, ['iso_a4_210x297mm']);
@@ -490,8 +494,7 @@ void main() {
     expect(result.statusCode, 0x040B);
   });
 
-  test('secure 打印机走 https 端点（ipps）——连接本地明文服务器应握手失败',
-      () async {
+  test('secure 打印机走 https 端点（ipps）——连接本地明文服务器应握手失败', () async {
     final securePrinter = DiscoveredPrinter(
       name: 'x',
       host: '127.0.0.1',
@@ -506,8 +509,7 @@ void main() {
     );
   });
 
-  test('waitForTerminalState：TLS 握手抖动（HandshakeException）被瞬态吸收',
-      () async {
+  test('waitForTerminalState：TLS 握手抖动（HandshakeException）被瞬态吸收', () async {
     // ipps 打印机在局域网常见 TLS 握手瞬时失败；轮询必须吸收而非中断。
     var calls = 0;
     final flaky = _HandshakeFlakyClient(() {
@@ -524,8 +526,7 @@ void main() {
     expect(calls, 3); // 2 次握手抖动 + 1 次成功
   });
 
-  test('waitForTerminalState：握手连续失败超过上限 → 抛出（容错有界）',
-      () async {
+  test('waitForTerminalState：握手连续失败超过上限 → 抛出（容错有界）', () async {
     final alwaysFails =
         _HandshakeFlakyClient(() => throw HandshakeException('down'));
     await expectLater(

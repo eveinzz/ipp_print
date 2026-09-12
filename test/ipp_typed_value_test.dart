@@ -62,12 +62,11 @@ void main() {
       final bad = v([
         0, 0, 1, 104, 0, 0, 1, 104, 9, //
       ]);
-      expect(
-          () => bad.asResolution, throwsA(isA<IppPrintException>()));
+      expect(() => bad.asResolution, throwsA(isA<IppPrintException>()));
     });
     test('非 9 字节 → 抛', () {
-      expect(() => v([0, 0, 1]).asResolution,
-          throwsA(isA<IppPrintException>()));
+      expect(
+          () => v([0, 0, 1]).asResolution, throwsA(isA<IppPrintException>()));
     });
   });
 }

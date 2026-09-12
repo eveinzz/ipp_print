@@ -83,9 +83,9 @@ void main() {
     }
 
     test('fidelity=exact → 下发 ipp-attribute-fidelity=true（1 字节 0x01）', () {
-      final tail =
-          attrTail(build(const PrintOptions(fidelity: PrintFidelity.exact)),
-              'ipp-attribute-fidelity');
+      final tail = attrTail(
+          build(const PrintOptions(fidelity: PrintFidelity.exact)),
+          'ipp-attribute-fidelity');
       expect(tail[0], 0x00); // value-len 高字节
       expect(tail[1], 0x01); // value-len 低字节 = 1
       expect(tail[2], 0x01); // true
@@ -106,8 +106,7 @@ void main() {
       );
       expect(tail[1], 0x09); // value-len = 9
       // cross=360 (0x00000168), feed=360, unit=3
-      expect(tail.sublist(2, 11),
-          [0, 0, 1, 104, 0, 0, 1, 104, 3]);
+      expect(tail.sublist(2, 11), [0, 0, 1, 104, 0, 0, 1, 104, 3]);
     });
   });
 

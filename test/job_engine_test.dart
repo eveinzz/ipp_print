@@ -17,14 +17,12 @@ void main() {
           options: o,
         );
 
-    test('ipp-attribute-fidelity 位于 Group 1 操作属性组（0.6 修复：原误入 Group 2）',
-        () {
+    test('ipp-attribute-fidelity 位于 Group 1 操作属性组（0.6 修复：原误入 Group 2）', () {
       final body = build(const PrintOptions(fidelity: PrintFidelity.exact));
       expect(groupOf(body, 'ipp-attribute-fidelity'), 0x01);
     });
 
-    test('copies 等 job template 属性位于 Group 2（RFC 8011 §4.2.1.1 本就正确）',
-        () {
+    test('copies 等 job template 属性位于 Group 2（RFC 8011 §4.2.1.1 本就正确）', () {
       final body = build(const PrintOptions(copies: 2));
       expect(groupOf(body, 'copies'), 0x02);
     });
@@ -39,8 +37,7 @@ void main() {
       expect(groupOf(body, 'ipp-attribute-fidelity'), 0x01);
     });
 
-    test('Validate-Job 与 Print-Job 同构：printer-resolution 同步下发（9 字节）',
-        () {
+    test('Validate-Job 与 Print-Job 同构：printer-resolution 同步下发（9 字节）', () {
       final body = IppCodec.buildValidateJob(
         printerUri: 'ipp://p:631/ipp/print',
         documentFormat: 'application/pdf',
@@ -85,8 +82,7 @@ void main() {
       expect(body.last, 0x03);
     });
 
-    test('buildCreateJob：fidelity 与 Print-Job 同构（§4.2.4 排除清单不含它）',
-        () {
+    test('buildCreateJob：fidelity 与 Print-Job 同构（§4.2.4 排除清单不含它）', () {
       final body = IppCodec.buildCreateJob(
         printerUri: 'ipp://p:631/ipp/print',
         requestId: 7,
@@ -104,8 +100,7 @@ void main() {
       );
     });
 
-    test('buildSendDocument：op=0x0006，job-id + last-document（MUST），数据尾随',
-        () {
+    test('buildSendDocument：op=0x0006，job-id + last-document（MUST），数据尾随', () {
       final body = IppCodec.buildSendDocument(
         printerUri: 'ipp://p:631/ipp/print',
         jobId: 42,

@@ -46,9 +46,7 @@ void main() {
     ) =>
         buildFn(printerUri: 'ipp://p:631/ipp/print', requestId: 1);
 
-    test(
-        'Print-Job：print-quality=5 → Group 2 + enum tag 0x23 + 4 字节大端',
-        () {
+    test('Print-Job：print-quality=5 → Group 2 + enum tag 0x23 + 4 字节大端', () {
       final body = IppCodec.buildPrintJob(
         printerUri: 'ipp://p:631/ipp/print',
         documentFormat: 'application/pdf',

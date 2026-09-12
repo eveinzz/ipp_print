@@ -29,9 +29,8 @@ class PrintTicket {
         media: o.media,
         colorMode: o.colorMode,
         sides: o.duplex,
-        resolution: o.resolution == null
-            ? null
-            : _resolutionToKeyword(o.resolution!),
+        resolution:
+            o.resolution == null ? null : _resolutionToKeyword(o.resolution!),
         copies: o.copies,
         fidelity: o.fidelity,
         printQuality: o.printQuality,

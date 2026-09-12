@@ -54,8 +54,12 @@ Uint8List _resp(int status, int groupTag, List<int> attrs) {
     final nb = name.codeUnits;
     return [
       tag,
-      (nb.length >> 8) & 0xFF, nb.length & 0xFF, ...nb,
-      (value.length >> 8) & 0xFF, value.length & 0xFF, ...value,
+      (nb.length >> 8) & 0xFF,
+      nb.length & 0xFF,
+      ...nb,
+      (value.length >> 8) & 0xFF,
+      value.length & 0xFF,
+      ...value,
     ];
   }
 
@@ -89,16 +93,29 @@ List<int> _kwAttr(String name, String value) {
   final nb = name.codeUnits;
   final vb = value.codeUnits;
   return [
-    0x44, (nb.length >> 8) & 0xFF, nb.length & 0xFF, ...nb,
-    (vb.length >> 8) & 0xFF, vb.length & 0xFF, ...vb,
+    0x44,
+    (nb.length >> 8) & 0xFF,
+    nb.length & 0xFF,
+    ...nb,
+    (vb.length >> 8) & 0xFF,
+    vb.length & 0xFF,
+    ...vb,
   ];
 }
 
 List<int> _intAttr(String name, int v) {
   final nb = name.codeUnits;
   return [
-    0x21, (nb.length >> 8) & 0xFF, nb.length & 0xFF, ...nb, 0, 4,
-    (v >> 24) & 0xFF, (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF,
+    0x21,
+    (nb.length >> 8) & 0xFF,
+    nb.length & 0xFF,
+    ...nb,
+    0,
+    4,
+    (v >> 24) & 0xFF,
+    (v >> 16) & 0xFF,
+    (v >> 8) & 0xFF,
+    v & 0xFF,
   ];
 }
 
@@ -160,12 +177,13 @@ void main() {
       });
       final ipp = IppPrint(discovery: _FakeDiscovery(), client: client);
       final rasterizer = StaticRasterizer(RasterPage(
-          width: 2, height: 1, bytes: Uint8List.fromList([255, 0, 0, 255, 0, 0])));
+          width: 2,
+          height: 1,
+          bytes: Uint8List.fromList([255, 0, 0, 255, 0, 0])));
       final events = <PrintProgress>[];
       await for (final p in ipp.print(
         document: PrintDocument(
-            bytes: const [0x25, 0x50, 0x44, 0x46],
-            mimeType: 'application/pdf'),
+            bytes: const [0x25, 0x50, 0x44, 0x46], mimeType: 'application/pdf'),
         printer: _printer(_l3250Txt),
         rasterizer: rasterizer,
         jobTimeout: const Duration(seconds: 2),
@@ -205,8 +223,7 @@ void main() {
       expect(client.operations, [IppCodec.opGetPrinterAttributes]);
     });
 
-    test('非 PDF 文档走栅格回退 → 拒绝（现管线只能栅格化 PDF，不假装能处理）',
-        () async {
+    test('非 PDF 文档走栅格回退 → 拒绝（现管线只能栅格化 PDF，不假装能处理）', () async {
       final client = FakeIppClient({
         IppCodec.opGetPrinterAttributes: _printerPwg,
       });
@@ -247,15 +264,14 @@ void main() {
       expect(client.operations, [IppCodec.opGetPrinterAttributes]);
     });
 
-    test('TXT 无 IPP 证据（unknown）→ 拒绝，不发任何请求（0.5 Gate 事实化）',
-        () async {
+    test('TXT 无 IPP 证据（unknown）→ 拒绝，不发任何请求（0.5 Gate 事实化）', () async {
       final client = FakeIppClient({});
       final ipp = IppPrint(discovery: _FakeDiscovery(), client: client);
       await expectLater(
         ipp
             .print(
-              document: PrintDocument(
-                  bytes: const [1], mimeType: 'application/pdf'),
+              document:
+                  PrintDocument(bytes: const [1], mimeType: 'application/pdf'),
               printer: _printer({'ty': 'Some Printer'}),
               rasterizer: StaticRasterizer(RasterPage(
                   width: 1, height: 1, bytes: Uint8List.fromList([0, 0, 0]))),
@@ -266,7 +282,8 @@ void main() {
       expect(client.operations, isEmpty);
     });
 
-    test('vendorOnly（仅声明 escpr）+ 打印机声明 PDF → PDF 直投放行'
+    test(
+        'vendorOnly（仅声明 escpr）+ 打印机声明 PDF → PDF 直投放行'
         '（0.5 Gate 事实化：IPP+PDF 设备不再整包拒绝）', () async {
       final client = FakeIppClient({
         IppCodec.opGetPrinterAttributes: _printerPdf,
@@ -277,10 +294,9 @@ void main() {
       final events = <PrintProgress>[];
       await for (final p in ipp.print(
         document: PrintDocument(
-            bytes: const [0x25, 0x50, 0x44, 0x46],
-            mimeType: 'application/pdf'),
-        printer: _printer(
-            {'pdl': 'application/vnd.epson.escpr', 'rp': 'ipp/print'}),
+            bytes: const [0x25, 0x50, 0x44, 0x46], mimeType: 'application/pdf'),
+        printer:
+            _printer({'pdl': 'application/vnd.epson.escpr', 'rp': 'ipp/print'}),
         jobTimeout: const Duration(seconds: 2),
       )) {
         events.add(p);

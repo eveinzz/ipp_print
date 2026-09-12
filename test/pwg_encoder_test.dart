@@ -86,18 +86,22 @@ void main() {
   group('packBits（像素粒度，bpp=3；官方 bpp=1 样例向量）', () {
     test('官方样例向量（bpp=1）：3 个非重复 octet -> 0xFE + 3 octets', () {
       // PWG 5102.4 §4.4.1：0xFE.8F.78.F7（头 257-3 = 0xFE）
-      expect(PwgRasterEncoder.packBits(Uint8List.fromList([0x8F, 0x78, 0xF7]), bpp: 1),
+      expect(
+          PwgRasterEncoder.packBits(Uint8List.fromList([0x8F, 0x78, 0xF7]),
+              bpp: 1),
           [0xFE, 0x8F, 0x78, 0xF7]);
     });
 
     test('官方样例向量（bpp=1）：重复 3 octets -> 0x02 + 1 octet', () {
-      expect(PwgRasterEncoder.packBits(Uint8List.fromList([0x77, 0x77, 0x77]), bpp: 1),
+      expect(
+          PwgRasterEncoder.packBits(Uint8List.fromList([0x77, 0x77, 0x77]),
+              bpp: 1),
           [0x02, 0x77]);
     });
 
     test('单像素行 -> 头 0x00 + 1 像素（尾部单像素）', () {
-      expect(PwgRasterEncoder.packBits(Uint8List.fromList(_red)),
-          [0x00, ..._red]);
+      expect(
+          PwgRasterEncoder.packBits(Uint8List.fromList(_red)), [0x00, ..._red]);
     });
 
     test('两个相同像素 -> 重复 run 头 count-1 = 0x01', () {
@@ -179,9 +183,47 @@ void main() {
     // encodePage 写出），packBits 期望从第二个 octet 起。
     const expectedRows = <List<int>>[
       [0x00, 0xFF, 0xFF, 0xFF, 0x02, 0xFF, 0xFF, 0x00, 0x03, 0xFF, 0xFF, 0xFF],
-      [0xFE, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x00, 0x02, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0xFF, 0xFF],
+      [
+        0xFE,
+        0xFF,
+        0xFF,
+        0x00,
+        0x00,
+        0x00,
+        0xFF,
+        0xFF,
+        0xFF,
+        0x00,
+        0x02,
+        0xFF,
+        0xFF,
+        0xFF,
+        0xFF,
+        0x00,
+        0xFF,
+        0x00,
+        0xFF,
+        0xFF,
+        0xFF
+      ],
       [0x01, 0xFF, 0xFF, 0x00, 0x02, 0xFF, 0xFF, 0xFF, 0x02, 0x00, 0xFF, 0x00],
-      [0x02, 0xFF, 0xFF, 0x00, 0x02, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0xFF, 0xFF],
+      [
+        0x02,
+        0xFF,
+        0xFF,
+        0x00,
+        0x02,
+        0xFF,
+        0xFF,
+        0xFF,
+        0xFF,
+        0x00,
+        0xFF,
+        0x00,
+        0xFF,
+        0xFF,
+        0xFF
+      ],
       [0x00, 0xFF, 0xFF, 0xFF, 0x02, 0xFF, 0xFF, 0x00, 0x03, 0xFF, 0xFF, 0xFF],
       [0x07, 0xFF, 0xFF, 0xFF],
       [0x07, 0xFF, 0x00, 0x00],
@@ -214,8 +256,11 @@ void main() {
       final out = encoder.encodePage(_page(2, 1, [..._red, ..._blue]));
       expect(out.length, greaterThan(1796));
       final head = out.sublist(0, 1796);
-      int u32(int off) => (head[off] << 24) | (head[off + 1] << 16) |
-          (head[off + 2] << 8) | head[off + 3];
+      int u32(int off) =>
+          (head[off] << 24) |
+          (head[off + 1] << 16) |
+          (head[off + 2] << 8) |
+          head[off + 3];
       expect(u32(372), 2, reason: 'cupsWidth');
       expect(u32(376), 1, reason: 'cupsHeight');
       expect(u32(384), 8, reason: 'cupsBitsPerColor');
@@ -234,7 +279,12 @@ void main() {
         width: 2,
         height: 2,
         runs: [
-          (2, _packed([[0x01, ..._red]])),
+          (
+            2,
+            _packed([
+              [0x01, ..._red]
+            ])
+          ),
         ],
       );
       expect(encoder.encodePage(page), expected);
@@ -248,8 +298,18 @@ void main() {
         width: 2,
         height: 2,
         runs: [
-          (1, _packed([[0x01, ..._red]])),
-          (1, _packed([[0x01, ..._blue]])),
+          (
+            1,
+            _packed([
+              [0x01, ..._red]
+            ])
+          ),
+          (
+            1,
+            _packed([
+              [0x01, ..._blue]
+            ])
+          ),
         ],
       );
       expect(encoder.encodePage(page), expected);
@@ -262,7 +322,12 @@ void main() {
         width: 1,
         height: 1,
         runs: [
-          (1, _packed([[0x00, ..._red]])),
+          (
+            1,
+            _packed([
+              [0x00, ..._red]
+            ])
+          ),
         ],
         dpi: 600,
       );
@@ -273,7 +338,12 @@ void main() {
       final row = [..._red, ..._red];
       final page = _page(2, 3, [...row, ...row, ...row]);
       final expected = _expectedPage(width: 2, height: 3, runs: [
-        (3, _packed([[0x01, ..._red]])),
+        (
+          3,
+          _packed([
+            [0x01, ..._red]
+          ])
+        ),
       ]);
       expect(encoder.encodePage(page), expected);
     });
@@ -282,7 +352,9 @@ void main() {
       final page = _page(1, 257, [
         for (var i = 0; i < 257; i++) ..._red,
       ]);
-      final packedRow = _packed([[0x00, ..._red]]);
+      final packedRow = _packed([
+        [0x00, ..._red]
+      ]);
       final expected = _expectedPage(
         width: 1,
         height: 257,
@@ -292,16 +364,19 @@ void main() {
     });
 
     test('零高度页：仅页头 1796 字节、无行组（对抗性种子）', () {
-      final out = encoder.encodePage(
-          RasterPage(width: 1, height: 0, bytes: Uint8List(0)));
+      final out = encoder
+          .encodePage(RasterPage(width: 1, height: 0, bytes: Uint8List(0)));
       expect(out.length, 1796);
     });
 
     test('奇数宽度 1px 行程正确（边界种子）', () {
       final page = _page(1, 2, [..._red, ..._red]);
       // 单像素行：PackBits = 尾部单像素（头 0x00 + 1 像素）
-      final packedRow = _packed([[0x00, ..._red]]);
-      final expected = _expectedPage(width: 1, height: 2, runs: [(2, packedRow)]);
+      final packedRow = _packed([
+        [0x00, ..._red]
+      ]);
+      final expected =
+          _expectedPage(width: 1, height: 2, runs: [(2, packedRow)]);
       expect(encoder.encodePage(page), expected);
     });
 
