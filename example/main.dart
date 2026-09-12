@@ -1,10 +1,13 @@
 /// Minimal usage example for ipp_print.
 ///
 /// Real discovery requires a LAN with broadcasting printers, so this example
-/// injects a fake [PrinterDiscovery] and a fake [PdfRasterizer] to show the
-/// full API surface offline. In a real app you would use
-/// `MDnsPrinterDiscovery()` and a `PdfRasterizer` backed by the `printing`
-/// package's `rasterPdf`.
+/// injects a fake [PrinterDiscovery] and a fake [PdfRasterizer] to walk the
+/// full API surface without hardware. With the fake discovery, `discover()`
+/// is fully offline; `probe()` / `printPdf()` still speak IPP to the address
+/// the fake reports, so on a network without a printer there they honestly
+/// report `offline` — that is the expected result, not an example bug.
+/// In a real app use `MDnsPrinterDiscovery()` and a `PdfRasterizer` backed by
+/// the `printing` package's `rasterPdf`.
 library;
 
 import 'dart:typed_data';
@@ -24,9 +27,8 @@ class FakeDiscovery implements PrinterDiscovery {
           resourcePath: '/ipp/print',
           txt: {
             'rp': 'ipp/print',
-            'pdl':
-                'application/octet-stream,image/pwg-raster,'
-                    'application/vnd.epson.escpr',
+            'pdl': 'application/octet-stream,image/pwg-raster,'
+                'application/vnd.epson.escpr',
           },
         ),
       ];
@@ -44,7 +46,9 @@ class FakeRasterizer implements PdfRasterizer {
 }
 
 Future<void> main() async {
-  final ipp = IppPrint();
+  // 注入假发现层（否则默认走真实平台发现：无打印机时 printers 为空，
+  // 下方 printers.first 会抛 StateError——注释承诺的离线示例即落空）。
+  final ipp = IppPrint(discovery: FakeDiscovery());
 
   // 1. Discover every broadcasting printer on the LAN.
   final printers = await ipp.discover(timeout: const Duration(seconds: 5));

@@ -19,8 +19,7 @@ void main() {
 
     setUp(() => client = FakeQueueClient());
 
-    test('submitJob 返回作业快照（job-id + job-state + job-state-reasons）',
-        () async {
+    test('submitJob 返回作业快照（job-id + job-state + job-state-reasons）', () async {
       client.enqueue(0x0002, jobSubmitted);
       final s = await client.submitJob(
         testPrinter(),
@@ -32,8 +31,7 @@ void main() {
       expect(s.stateReasons, ['job-incoming']);
     });
 
-    test('createJob → job-id；sendDocument(last: true) 成功且请求含文档数据',
-        () async {
+    test('createJob → job-id；sendDocument(last: true) 成功且请求含文档数据', () async {
       client.enqueue(
         0x0005,
         resp(0, 0x02, [...intAttr('job-id', 42), ...intAttr('job-state', 4)]),
@@ -94,8 +92,7 @@ void main() {
       return job;
     }
 
-    test('submit：门→协商→提交，返回 PrintJob 快照（documentFormat 来自声明集）',
-        () async {
+    test('submit：门→协商→提交，返回 PrintJob 快照（documentFormat 来自声明集）', () async {
       final job = await submitPdf();
       expect(job.jobId, 42);
       expect(job.state, IppJobState.processing);
@@ -111,8 +108,7 @@ void main() {
       client.enqueue(0x0009, jobSnapshot(state: 5));
       client.enqueue(0x0009, jobSnapshot(state: 9));
       final snapshots = await ipp
-          .monitor(submittedJob!,
-              interval: const Duration(milliseconds: 1))
+          .monitor(submittedJob!, interval: const Duration(milliseconds: 1))
           .toList();
       expect(snapshots.map((s) => s.state).toList(), [
         IppJobState.pending,
@@ -127,8 +123,7 @@ void main() {
       client.enqueueThrow(0x0009, const SocketException('reset'));
       client.enqueue(0x0009, jobSnapshot(state: 9));
       final snapshots = await ipp
-          .monitor(submittedJob!,
-              interval: const Duration(milliseconds: 1))
+          .monitor(submittedJob!, interval: const Duration(milliseconds: 1))
           .toList();
       expect(snapshots, hasLength(1));
       expect(snapshots.single.state, IppJobState.completed);
@@ -150,6 +145,32 @@ void main() {
             .toList(),
         throwsA(isA<IppJobTimeoutException>()),
       );
+    });
+
+    test('monitor：瞬态异常路径同样受 timeout 硬上界约束（0.7.2 修复锚点）', () async {
+      await submitPdf();
+      // 设备持续不可达：只投 SocketException，永不给出快照。maxTransientErrors
+      // 放大到 1000，使「次数用尽→rethrow」不会先于 deadline 触发，从而
+      // 单独检验 deadline 对瞬态分支的约束力。
+      for (var i = 0; i < 500; i++) {
+        client.enqueueThrow(0x0009, const SocketException('reset'));
+      }
+      final watch = Stopwatch()..start();
+      await expectLater(
+        ipp
+            .monitor(
+              submittedJob!,
+              interval: const Duration(milliseconds: 1),
+              timeout: const Duration(milliseconds: 30),
+              maxTransientErrors: 1000,
+            )
+            .toList(),
+        throwsA(isA<IppJobTimeoutException>()),
+      );
+      watch.stop();
+      // 修复前：deadline 只在成功分支判定 → 本用例会耗尽队列并抛
+      // IppPrintException('unexpected op')，即断言天然转红。
+      expect(watch.elapsed, lessThan(const Duration(seconds: 2)));
     });
 
     test('getJob 返回刷新快照；cancel(PrintJob) 走 Cancel-Job', () async {

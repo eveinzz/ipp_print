@@ -54,7 +54,9 @@ class IppPrint {
   /// 解析规则（诚实解析，不猜）：
   /// - scheme 白名单 ipp / ipps / http / https，其余抛 [IppPrintException]；
   /// - `secure` = ipps/https（传输加密）；逻辑 scheme 恒 ipp/ipps；
-  /// - 缺省端口：ipp/ipps = 631（RFC 8010 §4.1 IPP well-known port /
+  /// - 缺省端口：ipp/ipps = 631（RFC 8010 §5 "IPP URI Schemes" 原文：
+  ///   "port 631 is the IANA-assigned well-known port for the 'ipp' and
+  ///   'ipps' schemes"；§4 章首同载 Printer MUST support 631 /
   ///   RFC 7472 ipps 缺省端口）、
   ///   http/https = 80/443（HTTP 标准）；显式端口原样采用；
   /// - 空路径 → `/`（根端点合法，可达性交协商器裁决）；
@@ -63,12 +65,15 @@ class IppPrint {
   /// [name] 为宿主侧显示名，缺省 `Manual · host:port`；返回的
   /// [DiscoveredPrinter] 与发现产物同构（可进 probe/print/submit/monitor）。
   DiscoveredPrinter addEndpoint(Uri uri, {String? name}) {
-    const transportSchemes = {'ipp': false, 'ipps': true,
-      'http': false, 'https': true};
+    const transportSchemes = {
+      'ipp': false,
+      'ipps': true,
+      'http': false,
+      'https': true
+    };
     final scheme = uri.scheme.toLowerCase();
     if (!transportSchemes.containsKey(scheme)) {
-      throw IppPrintException(
-          'addEndpoint: unsupported scheme "$scheme" '
+      throw IppPrintException('addEndpoint: unsupported scheme "$scheme" '
           '(expected ipp / ipps / http / https)');
     }
     if (uri.host.isEmpty) {
@@ -85,7 +90,7 @@ class IppPrint {
         : switch (scheme) {
             'http' => 80,
             'https' => 443,
-            _ => 631, // ipp / ipps：RFC 8010 §4.1 / RFC 7472 缺省端口
+            _ => 631, // ipp / ipps：RFC 8010 §5 / RFC 7472 缺省端口
           };
     final path = uri.path.isEmpty ? '/' : uri.path;
     final host = uri.host;
@@ -116,8 +121,7 @@ class IppPrint {
     void Function(PrinterInfo info)? onInfo,
   }) async {
     final txtCapability = CapabilityClassifier.classify(printer.txt);
-    if (!printer.manualEndpoint &&
-        txtCapability == PrinterCapability.unknown) {
+    if (!printer.manualEndpoint && txtCapability == PrinterCapability.unknown) {
       return PrinterProbeStatus.unsupported;
     }
     if (txtCapability == PrinterCapability.airPrint) {
@@ -132,11 +136,11 @@ class IppPrint {
           .getPrinterAttributes(printer)
           .timeout(const Duration(seconds: 10));
       final formats = attrs.documentFormats;
-      final ok = formats
-          .any((f) => f.toLowerCase().contains('pwg-raster'));
+      final ok = formats.any((f) => f.toLowerCase().contains('pwg-raster'));
       ippProbeLog('probe ${printer.name}: $ok formats=$formats');
       final info = PrinterInfo(
-        capability: ok ? PrinterCapability.ippDirect : PrinterCapability.vendorOnly,
+        capability:
+            ok ? PrinterCapability.ippDirect : PrinterCapability.vendorOnly,
         mediaSupported: attrs.mediaSupported,
         documentFormats: formats,
         state: attrs.state,
@@ -302,9 +306,11 @@ class IppPrint {
 
   /// 监听作业状态流（0.6 Job Engine）：按 [interval] 轮询
   /// Get-Job-Attributes，产出 [PrintJob] 快照；终态快照产出后正常关流；
-  /// 超时抛 [IppJobTimeoutException]。瞬态故障（网络抖动 / HTTP 5xx /
-  /// TLS 握手抖动）在 [maxTransientErrors] 次内吸收（语义同
-  /// [IppClient.waitForTerminalState]）。
+  /// 超时抛 [IppJobTimeoutException]（**硬上界**：瞬态吸收同样不得越过
+  /// [timeout]，与 [IppClient.waitForTerminalState] 的 deadline 语义一致）。
+  /// 瞬态故障（网络抖动 / HTTP 5xx / TLS 握手抖动）在
+  /// [maxTransientErrors] 次内吸收；次数用尽且仍在 [timeout] 内时，平台
+  /// 异常原样透出（如 `SocketException`）——如实反映网络已不可达。
   Stream<PrintJob> monitor(
     PrintJob job, {
     Duration interval = const Duration(seconds: 2),
@@ -367,8 +373,7 @@ class IppPrint {
     required PrintTicket ticket,
     required PrinterCapabilities capabilities,
   }) =>
-      CapabilityValidator.validate(
-          ticket: ticket, capabilities: capabilities);
+      CapabilityValidator.validate(ticket: ticket, capabilities: capabilities);
 
   /// 取消指定作业（透传 [IppClient.cancelJob]）。
   Future<void> cancelJob(DiscoveredPrinter printer, int jobId) =>

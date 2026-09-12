@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import '../models.dart';
+import '../version.dart';
 import 'ipp_log.dart';
 import 'ipp_message.dart';
 
@@ -94,8 +95,7 @@ class IppClient {
     }
     if (status >= 500) {
       // 服务器侧瞬态故障：交由轮询重试吸收，不视为协议错误。
-      throw IppTransientException(
-          'HTTP $status from ${httpEndpoint.host}');
+      throw IppTransientException('HTTP $status from ${httpEndpoint.host}');
     }
     if (status != HttpStatus.ok) {
       throw IppPrintException('HTTP $status from ${httpEndpoint.host}');
@@ -104,11 +104,17 @@ class IppClient {
   }
 
   /// 发送一次请求并收取原始响应（状态码与体；解析与错误判定交 [post]）。
-  Future<(int, Uint8List)> _postOnce(Uri httpEndpoint, Uint8List ippBody) async {
+  Future<(int, Uint8List)> _postOnce(
+      Uri httpEndpoint, Uint8List ippBody) async {
     final request = await _http.postUrl(httpEndpoint);
     request.headers.set(HttpHeaders.contentTypeHeader, 'application/ipp');
     request.headers.set(HttpHeaders.acceptEncodingHeader, 'identity');
-    request.headers.set(HttpHeaders.userAgentHeader, 'ipp_print/0.7');
+    // 版本串单一真相源：lib/src/version.dart（0.7.2 起不再就地手写，
+    // 历史漂移：0.3→0.6→0.7 三次手改三次落后）。
+    request.headers.set(
+      HttpHeaders.userAgentHeader,
+      'ipp_print/$ippPrintVersion',
+    );
     request.headers.contentLength = ippBody.length;
     request.add(ippBody);
     final response = await request.close();
@@ -234,8 +240,8 @@ class IppClient {
           : IppJobState.fromCode(stateCode),
       jobName: _stringOf(jobGroup, 'job-name'),
       stateReasons: [
-        for (final v in jobGroup.attributes['job-state-reasons'] ??
-            const <IppValue>[])
+        for (final v
+            in jobGroup.attributes['job-state-reasons'] ?? const <IppValue>[])
           v.asString,
       ],
     );
@@ -322,8 +328,8 @@ class IppClient {
         jobName: _stringOf(g, 'job-name'),
         userName: _stringOf(g, 'job-originating-user-name'),
         stateReasons: [
-          for (final v in g.attributes['job-state-reasons'] ??
-              const <IppValue>[])
+          for (final v
+              in g.attributes['job-state-reasons'] ?? const <IppValue>[])
             v.asString,
         ],
       ));

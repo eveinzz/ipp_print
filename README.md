@@ -5,7 +5,7 @@ English | [简体中文](README.zh-CN.md)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 ![Dart SDK](https://img.shields.io/badge/Dart-%5E3.4-0175C2?logo=dart&logoColor=white)
 ![Protocol](https://img.shields.io/badge/protocol-IPP%201.1%20(RFC%208011)-green)
-![Tests](https://img.shields.io/badge/tests-77%20passing-brightgreen)
+![CI](https://github.com/eveinzz/ipp_print/actions/workflows/ci.yml/badge.svg)
 
 Headless IPP direct-printing kernel for Dart/Flutter: **printer discovery + deterministic capability classification + IPP Print-Job transport** with PWG-raster encoding. No UI by design — presentation and interaction are left to the host app.
 
@@ -41,13 +41,13 @@ Printing itself (IPP over HTTP/TLS) is pure Dart and identical on every platform
   - `ippDirect` — no URF but `pdl` contains `image/pwg-raster`; printable via this package.
   - `vendorOnly` — vendor-private formats only; guide the user to a vendor app.
 - **IPP 1.1 client** (RFC 8010 / RFC 8011): `Print-Job`, `Create-Job` + `Send-Document` (multi-document), `Get-Printer-Attributes`, `Get-Job-Attributes`, `Get-Jobs`, `Cancel-Job`; job-state polling with transient-fault tolerance.
-- **Capability engine** — `inspect()` returns `PrinterCapabilities`: 26 standard attributes (identity, state + reasons, accepting-jobs, document formats, media, color, duplex, resolutions, copies range, finishings, print quality, IPP versions, operations, URI security), parsed **leniently from deterministic printer self-report** (RFC 8011 §6.2) — a missing attribute means unsupported, never inferred. New syntax decoders: resolution (§5.1.16), rangeOfInteger (§5.1.14), boolean (§5.1.12).
+- **Capability engine** — `inspect()` requests 26 standard attributes (identity, state + reasons, accepting-jobs, document formats, media, color, duplex, resolutions, copies range, finishings, print quality, IPP versions, operations, URI security) and parses them into 27 capability fields, **leniently from deterministic printer self-report** (RFC 8011 §6.2) — a missing attribute means unsupported, never inferred. New syntax decoders: resolution (§5.1.16), rangeOfInteger (§5.1.14), boolean (§5.1.12).
 - **Validate-Job preflight** — `validateJob()` asks the printer "can you print this job?" (operation 0x0004, no document data) and returns a structured `PrintValidationResult` including the Unsupported Attributes group (tag 0x05), so multi-megabyte documents are only submitted after an explicit go-ahead.
 - **Job Engine** — split `submit()` / `monitor()` / `getJob()` / `cancel()` responsibilities (0.6): submitting returns an immutable `PrintJob` snapshot (job-state seven values + job-level `job-state-reasons`), `monitor()` polls as a state stream until a terminal state with bounded transient-fault absorption; `print()` progress streams stay fully backward compatible, both sharing one gate→negotiate→encode source.
 - **Manual endpoint** — `addEndpoint(Uri)` (0.7): undiscovered ≠ unprintable. For networks where mDNS is blocked, cross-subnet, or known-address scenarios; the URI itself is the user's assertion that an IPP endpoint exists, while capability is still decided by live queries + the negotiator (probe-driven). Honest parsing: scheme whitelist, standard default ports, ambiguous URIs rejected.
 - **TLS transport** — printers advertising only `_ipps._tcp` are directly printable (`https://` endpoint, self-signed certificates accepted by default).
 - **PWG-raster encoder** (PWG 5102.4): 1796-octet `cups_page_header2_t` page header, file-level `RaS2` sync word (once per document), row groups (1-octet row repeat count, 1–256 rows) with pixel-granularity PackBits-like run-length encoding (sRGB-8, bpp=3) — validated byte-for-byte against the spec's §4.4.2 sample bitmap and CUPS `raster-stream.c`. Real-printer verified (EPSON L3250, end-to-end paper output).
-- **Pure Dart, zero Flutter dependencies** — the protocol core is unit-testable offline; PDF rasterization is injected through the `PdfRasterizer` port (e.g. backed by `printing`'s `rasterPdf`).
+- **Flutter-free protocol core** — the IPP codec, domain models, format negotiator and PWG-raster encoder are pure Dart and unit-testable offline (no `dart:ui`). The package itself *is* a Flutter plugin: discovery talks to the platform Bonjour channel (`MethodChannel`, hence `package:flutter/services.dart`) and the debug logger reads `kDebugMode`. So facade-level tests need `flutter test`; plain `dart test` loads only the protocol-core subset (the facade/discovery test files cannot resolve the Flutter SDK). PDF rasterization is injected through the `PdfRasterizer` port (e.g. backed by `printing`'s `rasterPdf`).
 
 ### How this compares with `printing`
 
@@ -88,7 +88,7 @@ dependencies:
 
 ## Usage
 
-Minimal end-to-end flow (see [`example/main.dart`](example/main.dart) for a runnable offline version):
+Minimal end-to-end flow (see [`example/main.dart`](example/main.dart) for an offline API sample — it injects a fake discovery and a fake rasterizer, and is compiled as part of this package's analysis unit):
 
 ```dart
 final ipp = IppPrint();
@@ -259,9 +259,11 @@ serve as capability checklists.
 
 1. **mDNS-broadcasting devices only** — USB-connected, offline, or non-broadcasting printers are invisible (same as the OS print panel).
 2. **Self-signed TLS accepted by default** — printer certificates are self-signed as a rule; the `ipps://` channel validates encryption but not identity (strict mode via `IppClient(acceptSelfSignedTls: false)`).
-3. **No PDF direct-send** — direct printing requires the printer to declare `image/pwg-raster` in `pdl` (the classifier guarantees no misdirected jobs).
-4. **Fixed 300 dpi / sRGB-8** — resolution negotiation is not implemented yet (`printer-resolution` is not sent). Color mode is deliberately **not sent** as a job attribute, so the printer applies its own `print-color-mode-default` per RFC 8011 (typically `auto`); an explicit override (`color` / `monochrome`) is still supported via `PrintOptions.colorMode`.
+3. **PDF direct-send is opportunistic, not guaranteed** — a document is submitted verbatim only when the printer **declares** that MIME in `document-format-supported` (queried live, never from a cached probe). Otherwise the kernel falls back to `image/pwg-raster`, which requires an injected `PdfRasterizer` and a PDF source; a printer declaring neither is rejected rather than guessed (IPP Everywhere makes PDF only a SHOULD).
+4. **Resolution / color mode / print quality are sent only when you ask for them** — `null` means the attribute is omitted and the printer applies its own `*-default` (RFC 8011 §5.2). Raster dpi defaults to 300, which is **not** in every printer's `printer-resolution-supported` (real device: the EPSON L3250 declares only `360x360dpi` / `1440x720dpi`), so negotiate it from `PrinterInfo.resolutionsSupported` or override per call with `printPdf(dpi: …)`. The PWG page header is always sRGB-8.
 5. **AirPrint-class printers are not intercepted** — devices classified as `airPrint` are handed to the OS print panel.
+6. **Discovery strictness differs between transports** — the `multicast_dns` path (Android / Linux / Windows) drops an instance whose TXT record carries no `rp`; the native Bonjour path (iOS / macOS) falls back to `/ipp/print` when `rp` is absent. A printer that broadcasts IPP without `rp` can therefore appear on iOS/macOS and be missing on Android/Linux/Windows. (Conforming Bonjour printers — e.g. the L3250 — do broadcast `rp`, so this only affects non-conforming devices. Aligning the two policies is tracked in [TODO.md](TODO.md).)
+7. **Discovery timeout semantics differ between transports** — the native browser is bounded by one hard deadline, while `MDnsPrinterDiscovery` resolves instances serially, so its worst case is roughly `10 s × number of instances` rather than the requested timeout.
 
 ## FAQ
 

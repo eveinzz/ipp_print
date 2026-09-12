@@ -5,7 +5,7 @@
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 ![Dart SDK](https://img.shields.io/badge/Dart-%5E3.4-0175C2?logo=dart&logoColor=white)
 ![Protocol](https://img.shields.io/badge/protocol-IPP%201.1%20(RFC%208011)-green)
-![Tests](https://img.shields.io/badge/tests-77%20passing-brightgreen)
+![CI](https://github.com/eveinzz/ipp_print/actions/workflows/ci.yml/badge.svg)
 
 面向 Dart/Flutter 的无界面 IPP 直连打印内核：**打印机发现 + 确定性能力分类 + IPP Print-Job 传输**，含 PWG-raster 编码。刻意不含 UI——展示与交互全部留给宿主 App。
 
@@ -41,13 +41,13 @@
   - `ippDirect` —— 无 URF 但 `pdl` 含 `image/pwg-raster`；可由本包直连打印。
   - `vendorOnly` —— 仅厂商私有格式；引导用户使用厂商 App。
 - **IPP 1.1 客户端**（RFC 8010 / RFC 8011）：`Print-Job`、`Create-Job` + `Send-Document`（多文档）、`Get-Printer-Attributes`、`Get-Job-Attributes`、`Get-Jobs`、`Cancel-Job`；作业状态轮询带瞬态故障容错。
-- **能力引擎** —— `inspect()` 返回 `PrinterCapabilities`：26 项标准属性（身份、状态与原因、是否收作业、文档格式、介质、色彩、双面、分辨率、份数区间、整饰、打印质量、IPP 版本、操作集、URI 安全），全部**从打印机确定性自报 lenient 解析**（RFC 8011 §6.2）——属性缺失即不支持，绝不推断。新值语法解码：resolution（§5.1.16）、rangeOfInteger（§5.1.14）、boolean（§5.1.12）。
+- **能力引擎** —— `inspect()` 请求 26 项标准属性（身份、状态与原因、是否收作业、文档格式、介质、色彩、双面、分辨率、份数区间、整饰、打印质量、IPP 版本、操作集、URI 安全），解析为 27 个能力字段，全部**从打印机确定性自报 lenient 解析**（RFC 8011 §6.2）——属性缺失即不支持，绝不推断。新值语法解码：resolution（§5.1.16）、rangeOfInteger（§5.1.14）、boolean（§5.1.12）。
 - **Validate-Job 预检** —— `validateJob()` 先问打印机「这个 Job 你能不能处理」（操作码 0x0004，不带文档数据），返回结构化 `PrintValidationResult`（含 Unsupported Attributes 组，组 tag 0x05）——大文档只在明确放行后才提交。
 - **Job Engine** —— `submit()` / `monitor()` / `getJob()` / `cancel()` 职责拆分（0.6）：提交后拿到不可变 `PrintJob` 快照（job-state 七态 + `job-state-reasons` 作业级原因），`monitor()` 以状态流轮询至终态，瞬态故障有界吸收；`print()` 进度流保持向后兼容，二者共享 gate→协商→编码单一来源。
 - **手动直连** —— `addEndpoint(Uri)`（0.7）：发现不到 ≠ 不能打印。mDNS 被屏蔽、跨网段、已知地址场景，URI 本身即 IPP endpoint 存在性的用户断言；能力判定仍交实时查询 + 协商器终审（probe 驱动），解析诚实（scheme 白名单 / 标准缺省端口 / 歧义拒绝）。
 - **TLS 传输** —— 仅广播 `_ipps._tcp` 的机型可直接打印（`https://` 端点，默认接受自签证书）。
 - **PWG-raster 编码器**（PWG 5102.4）：1796 字节 `cups_page_header2_t` 页头 + 文件级 `RaS2` 同步字（每文档一次）+ 行组（1 字节行重复计数，1–256 行）+ 像素粒度 PackBits-like 游程编码（sRGB-8，bpp=3）—— 与规范 §4.4.2 样本位图及 CUPS `raster-stream.c` 逐字节比对验证；真机出纸验证通过（EPSON L3250）。
-- **纯 Dart，零 Flutter 依赖** —— 协议核心可离线单测；PDF 栅格化通过 `PdfRasterizer` 端口注入（例如由 `printing` 的 `rasterPdf` 实现）。
+- **协议内核不依赖 Flutter** —— IPP 编解码、领域模型、格式协商器与 PWG-raster 编码器均为纯 Dart，可离线单测（不触 `dart:ui`）。但**本包整体是 Flutter 插件**：发现层经平台 Bonjour 通道（`MethodChannel`，故引入 `package:flutter/services.dart`），调试日志读取 `kDebugMode`。因此 Facade 级测试必须用 `flutter test`；纯 `dart test` 只能加载协议内核子集（Facade/发现相关测试文件在无 Flutter SDK 时无法解析）。PDF 栅格化通过 `PdfRasterizer` 端口注入（例如由 `printing` 的 `rasterPdf` 实现）。
 
 ### 与 `printing` 的对比
 
@@ -88,7 +88,7 @@ dependencies:
 
 ## 用法
 
-最小端到端流程（可离线运行的版本见 [`example/main.dart`](example/main.dart)）：
+最小端到端流程（可离线跑的 API 示例见 [`example/main.dart`](example/main.dart)——注入假发现层与假栅格器，随本包的分析单元一起编译）：
 
 ```dart
 final ipp = IppPrint();
@@ -265,9 +265,11 @@ HP 官方 [jipp](https://github.com/HPInc/jipp) 与 istopwg 指南
 
 1. **仅限 mDNS 广播设备** —— USB 直连、离线、不发广播的打印机不可见（与系统打印面板同限）。
 2. **TLS 默认接受自签证书** —— 打印机证书普遍为自签；`ipps://` 通道校验加密但不校验身份（严格模式可用 `IppClient(acceptSelfSignedTls: false)`）。
-3. **不支持 PDF 直投** —— 直连打印要求打印机在 `pdl` 中声明 `image/pwg-raster`（分类器保证不会误投）。
-4. **固定 300 dpi / sRGB-8** —— 分辨率/色彩协商尚未实现（不发送 `printer-resolution`）。
+3. **PDF 直投是机会主义的，不是保证** —— 仅当打印机在 `document-format-supported` 中**声明**该 MIME（实时查询，不用缓存的 probe 结果）才原样提交；否则回退 `image/pwg-raster`，需要注入 `PdfRasterizer` 且源文档为 PDF；两者都未声明则如实拒绝（IPP Everywhere 中 PDF 仅为 SHOULD）。
+4. **分辨率 / 色彩模式 / 打印质量只在显式指定时下发** —— `null` 即不下发该属性，由打印机应用自身 `*-default`（RFC 8011 §5.2）。栅格 dpi 默认 300，而 300 **并非**所有打印机的 `printer-resolution-supported` 成员（真机事实：EPSON L3250 仅声明 `360x360dpi` / `1440x720dpi`）——请从 `PrinterInfo.resolutionsSupported` 协商，或用 `printPdf(dpi: …)` 按次覆盖。PWG 页头固定 sRGB-8。
 5. **不接管 AirPrint 机型** —— 分类为 `airPrint` 的设备交还系统打印面板。
+6. **两条发现通道的严格度不同** —— `multicast_dns` 路径（Android / Linux / Windows）会丢弃 TXT 记录缺 `rp` 的实例；原生 Bonjour 路径（iOS / macOS）在缺 `rp` 时回退 `/ipp/print`。因此一台广播 IPP 但不广播 `rp` 的打印机可能**在 iOS/macOS 可见、在 Android/Linux/Windows 不可见**。（合规的 Bonjour 打印机会广播 `rp`（如 L3250），故只影响不合规设备。两条策略的对齐已记入 [TODO.md](TODO.md)。）
+7. **两条发现通道的超时语义不同** —— 原生浏览器由单一硬 deadline 约束；`MDnsPrinterDiscovery` 逐实例串行解析，最坏耗时约为 `10 秒 × 实例数`，而非请求的 timeout。
 
 ## FAQ
 

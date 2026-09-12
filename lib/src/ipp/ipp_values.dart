@@ -23,10 +23,10 @@ class IppResponse {
 
   bool get isSuccessful => statusCode >= 0x0000 && statusCode <= 0x00FF;
 
-  /// 返回第一个组里（含跨组首个匹配）名为 [name] 的值列表。
+  /// 返回**全部属性组**中名为 [name] 的值（按组序拼接；同名属性出现在
+  /// 多个组时全部返回，即跨组可见而非只取首个匹配）。
   List<IppValue> values(String name) => [
-        for (final g in groups)
-          ...g.attributes[name] ?? const <IppValue>[],
+        for (final g in groups) ...g.attributes[name] ?? const <IppValue>[],
       ];
 
   IppValue? firstValue(String name) {

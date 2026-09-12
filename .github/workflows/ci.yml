@@ -16,5 +16,22 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
+      # 格式门（0.7.2）：内容与空白分离，格式漂移不进主干。
+      - name: Format gate
+        run: dart format --output=none --set-exit-if-changed lib test example
+      # 版本链闸（0.7.2）：独立于 version_consistency_test.dart 复核 podspec，
+      # 防止测试文件被误改后一致性失守（同类漂移已复发两次）。
+      - name: Version consistency (pubspec <-> podspecs)
+        run: |
+          set -eu
+          pub_version=$(grep -m1 '^version:' pubspec.yaml | awk '{print $2}')
+          for podspec in ios/ipp_print.podspec macos/ipp_print.podspec; do
+            pod_version=$(grep -m1 's\.version' "$podspec" | sed "s/.*'\([^']*\)'.*/\1/")
+            if [ "$pod_version" != "$pub_version" ]; then
+              echo "::error file=$podspec::podspec version '$pod_version' != pubspec '$pub_version'"
+              exit 1
+            fi
+          done
+          echo "version chain OK: $pub_version"
       - run: flutter analyze
       - run: flutter test

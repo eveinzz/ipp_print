@@ -48,8 +48,7 @@ Stream<Object> _prepareSubmission(
   // endpoint 存在性的用户断言，TXT 门对其无意义；能力终审仍在下方
   // 实时查询 + 协商器。豁免仅对 manual 生效，发现打印机不放松。
   if (!printer.manualEndpoint &&
-      CapabilityClassifier.classify(printer.txt) ==
-          PrinterCapability.unknown) {
+      CapabilityClassifier.classify(printer.txt) == PrinterCapability.unknown) {
     throw const IppUnsupportedException(
         'TXT record shows no IPP evidence (no rp/pdl/urf) — see probe()');
   }
@@ -142,7 +141,8 @@ Stream<PrintProgress> _submitAndAwait(
   if (state != IppJobState.completed) {
     throw IppPrintException('job ${summary.jobId} ended as ${state.name}');
   }
-  yield PrintProgress(PrintStage.done, pageCount: pageCount, jobId: summary.jobId);
+  yield PrintProgress(PrintStage.done,
+      pageCount: pageCount, jobId: summary.jobId);
 }
 
 /// Job Engine 实现（宿主 IppPrint 的私有协作类；同库 part 共享私有成员）。
@@ -200,8 +200,9 @@ class _JobEngine {
   }
 
   /// 轮询作业状态流：终态快照产出后关流；超时抛
-  /// [IppJobTimeoutException]；瞬态故障有界吸收（语义同
-  /// [IppClient.waitForTerminalState]）。
+  /// [IppJobTimeoutException]——**硬上界**，瞬态吸收不得越界（与
+  /// [IppClient.waitForTerminalState] 的 deadline 语义一致；0.7.2 前
+  /// deadline 只在查询成功分支判定，瞬态分支绕过它属实现缺陷）。
   Stream<PrintJob> monitor(
     PrintJob job, {
     Duration interval = const Duration(seconds: 2),
@@ -211,6 +212,12 @@ class _JobEngine {
     final deadline = DateTime.now().add(timeout);
     var transientErrors = 0;
     while (true) {
+      // 超时判定置于循环首：瞬态异常路径（continue）同样受 deadline 约束，
+      // 否则设备持续不可达时实际耗时 = timeout + 重试退避，且最终抛
+      // SocketException 而非文档承诺的 IppJobTimeoutException。
+      if (!DateTime.now().isBefore(deadline)) {
+        throw IppJobTimeoutException(job.jobId, 'not terminal within timeout');
+      }
       final IppJobSummary s;
       try {
         s = await _client.getJob(job.printer, job.jobId);
@@ -231,9 +238,8 @@ class _JobEngine {
       }
       yield job.withSummary(s);
       if (s.jobState.isTerminal) return;
-      if (!DateTime.now().isBefore(deadline)) {
-        throw IppJobTimeoutException(job.jobId, 'not terminal within timeout');
-      }
+      // 超时判定只在循环首（此处原有一次等价判定，提上后删除，避免两处
+      // 判据漂移）。
       await Future<void>.delayed(interval);
     }
   }

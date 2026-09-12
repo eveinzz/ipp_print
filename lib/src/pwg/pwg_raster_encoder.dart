@@ -18,7 +18,9 @@ import '../models.dart';
 /// （像素粒度，详见 [packBits]）。
 ///
 /// 同步字 "RaS2" 为**文件级**（规范 Figure 1：sync + N 页），只在文档
-/// 开头出现一次——由调用方（printPdf）写入，[encodePage] 不含。
+/// 开头出现一次——由提交管线写入（`ipp_print_jobs.dart` 的
+/// `_prepareSubmission`：先 `pwg.add(enc.syncWordBytes)` 再逐页
+/// [encodePage]），[encodePage] 自身不含同步字。
 class PwgRasterEncoder implements DocumentEncoder {
   const PwgRasterEncoder({this.dpi = 300});
 
@@ -45,8 +47,7 @@ class PwgRasterEncoder implements DocumentEncoder {
       Uint8List(4)..buffer.asByteData().setUint32(0, magic, Endian.big);
 
   Uint8List encodePage(RasterPage page) {
-    final out = BytesBuilder(copy: false)
-      ..add(_buildHeader(page));
+    final out = BytesBuilder(copy: false)..add(_buildHeader(page));
     final rows = _runLengthRows(page);
     for (final run in rows) {
       // 行重复计数：1 octet（count-1，1–256 行）——规约 §4.4。
@@ -203,7 +204,8 @@ class PwgRasterEncoder implements DocumentEncoder {
   ///
   /// 行重复计数上限 256（1 octet 编码，规约 §4.4）；超长同色区
   /// （如 300dpi A4 空白边）拆分为多个行组。
-  List<(int, Uint8List)> _runLengthRows(RasterPage page) {    const maxRepeat = 256;
+  List<(int, Uint8List)> _runLengthRows(RasterPage page) {
+    const maxRepeat = 256;
     final stride = page.width * 3;
     final runs = <(int, Uint8List)>[];
     var row = 0;

@@ -13,7 +13,7 @@ import 'ipp_wire_fixtures.dart';
 /// - URI 本身即 IPP endpoint 存在性证据（用户断言）——**绕过 TXT 分类
 ///   否定门**，能力判定交给 probe / print 的实时查询 + 协商器（probe 驱动）；
 /// - 端点解析诚实：scheme 白名单、无 query/fragment、缺省端口按
-///   RFC 8010 §4.1 / RFC 7472（ipp/ipps = 631）与 HTTP 标准（80/443）；
+///   RFC 8010 §5 / RFC 7472（ipp/ipps = 631）与 HTTP 标准（80/443）；
 /// - 非 manual 的发现打印机仍受 TXT 门约束（既有锚点不放松）。
 void main() {
   group('addEndpoint URI 解析（诚实解析，不猜）', () {
@@ -41,7 +41,7 @@ void main() {
       expect(p.name, contains('192.168.1.50'));
     });
 
-    test('缺省端口：ipp/ipps = 631（RFC 8010 §4.1 / RFC 7472），http/https = 80/443', () {
+    test('缺省端口：ipp/ipps = 631（RFC 8010 §5 / RFC 7472），http/https = 80/443', () {
       expect(
           IppPrint()
               .addEndpoint(Uri.parse('ipp://192.168.1.50/ipp/print'))
@@ -52,11 +52,9 @@ void main() {
               .addEndpoint(Uri.parse('ipps://192.168.1.50/ipp/print'))
               .port,
           631);
-      expect(
-          IppPrint().addEndpoint(Uri.parse('http://192.168.1.50/ipp')).port,
+      expect(IppPrint().addEndpoint(Uri.parse('http://192.168.1.50/ipp')).port,
           80);
-      expect(
-          IppPrint().addEndpoint(Uri.parse('https://192.168.1.50/ipp')).port,
+      expect(IppPrint().addEndpoint(Uri.parse('https://192.168.1.50/ipp')).port,
           443);
     });
 
@@ -90,16 +88,14 @@ void main() {
       );
     });
 
-    test('probe：TXT 为空仍发起实时查询（manual 豁免 unknown 否定门）→ ready',
-        () async {
+    test('probe：TXT 为空仍发起实时查询（manual 豁免 unknown 否定门）→ ready', () async {
       client.enqueue(0x000B, printerPwgPdf);
       final status = await ipp.probe(manual);
       expect(status, PrinterProbeStatus.ready);
       expect(client.operations, [0x000B]);
     });
 
-    test('probe：manual 不放松能力判据——仅声明 pdf 仍如实 unsupported',
-        () async {
+    test('probe：manual 不放松能力判据——仅声明 pdf 仍如实 unsupported', () async {
       // 豁免的只是 TXT 分类否定门；ready 判据（声明集含 pwg-raster）
       // 对 manual 端点同样生效——manual ≠ 万能放行。
       client.enqueue(0x000B, printerPdf);
@@ -107,8 +103,7 @@ void main() {
       expect(status, PrinterProbeStatus.unsupported);
     });
 
-    test('submit：门不再拒（endpoint 存在性由用户断言）→ 实时协商 → 提交',
-        () async {
+    test('submit：门不再拒（endpoint 存在性由用户断言）→ 实时协商 → 提交', () async {
       client.enqueue(0x000B, printerPdf);
       client.enqueue(0x0002, jobSubmitted);
       final job = await ipp.submit(
@@ -135,7 +130,7 @@ void main() {
             bytes: Uint8List.fromList([1]),
             mimeType: 'application/pdf',
           ),
-        printer: discovered,
+          printer: discovered,
         ),
         throwsA(isA<IppUnsupportedException>()),
       );

@@ -177,7 +177,11 @@ job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收�
   同步补齐（缺省不下发，既有作业字节零变化）。
 - [x] `CapabilityValidator` 本地预检：ticket 值 ∉ capabilities → 结构化
   `PrintValidationResult`，与 Validate-Job（设备级终审）双层并存；
-  Facade 出口 `IppPrint.validateTicket`。
+  Facade 出口 `IppPrint.validateTicket`。**定位澄清（0.7.2）**：
+  `CapabilityValidator` **不进公共 barrel**——它不是宿主 API，宿主唯一门径
+  是本 Facade 出口（`test/public_api_test.dart` 已把该例外显式登记并锚定该
+  出口）；文件头「契约冻结 v1 对象」指的是**出参** `PrintValidationResult`
+  这一契约对象（已导出），校验器本身是实现细节。
 - [x] `DocumentRoute` 契约化确认：0.4 的 `DocumentDecision`
   （passthrough/documentFormat）即类型化路由出参，随本版冻结为契约对象。
 - [x] Structured Error 分类轴：`IppErrorCategory`（ipp/unsupported/job/
@@ -242,8 +246,48 @@ job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收�
 - 同轮收口（验收审计发现）：测试 fixture resolution 值 tag 0x35
   （textWithLanguage）→ 0x32（resolution，RFC 8010 Table 1，解析器
   tag 无关故锚点弱化而非断裂）；引用残留 5 处（端口出处 RFC 2910/7472
-  → RFC 8010 §4.1 / RFC 7472 ×2；resolution 节号 §5.1.14 → §5.1.16
+  → RFC 8010 §5 / RFC 7472 ×2；resolution 节号 §5.1.14 → §5.1.16
   注释 ×3）；UA 版本串漂移复发（0.6 → 0.7）。
+  （端口出处原记为 §4.1 属错引，0.7.2 按一手原文更正为 §5。）
+
+### 0.7.2 — Documentation & Version Truthfulness（已交付，2026-09-12）
+
+准入依据：CORE FREEZE 允许的「正确性 / 测试 / 文档」——无公共 API 增删。
+触发：0.7.1 全链审计（P0=0；问题全部落在**对外文档失真 / 版本链无单一
+真相源 / 引用错引**三类治理缺口，而非协议实现）。
+
+- [x] 双 README 边界清单 2 条**与实现相反**（「不支持 PDF 直投」「分辨率协商
+  尚未实现」）→ 改为与实现一致；补 2 条此前未披露的诚实条目（两条发现通道的
+  `rp` 策略 / 超时语义不对称）。
+- [x] 「Pure Dart, zero Flutter dependencies」半真声明 → 精确化（协议内核纯
+  Dart；包整体是 Flutter 插件，Facade 级测试需 `flutter test`）。
+- [x] RFC 错引更正：端口 631 出处 `RFC 8010 §4.1` → **§5**（一手核验，见下
+  「引用纪律」）；并回改 0.7.0 / 0.7.1 条目内的同一错引。
+- [x] 版本单一真相源：`lib/src/version.dart` + UA 派生 + `0.5.0` podspec →
+  `0.7.2`；闸 = `test/version_consistency_test.dart` + CI version-consistency。
+- [x] 公共导出面锚点 `test/public_api_test.dart`（43 类型编译期断言 + 导出闭包
+  静态闸 + `inspect()` 解析/超时映射 + `validateTicket()` 出口）。
+- [x] `monitor()` 超时硬上界修复（deadline 提至循环首）+ 瞬态路径锚点。
+- [x] `dart format` 全量收敛 + CI 格式门。
+- [x] 文档注释失真 2 处（`IppValue.values()` 跨组语义、PWG 同步字写入点）。
+- [x] `example/main.dart` 注入 `FakeDiscovery`（原为定义未注入，运行即抛
+  `StateError`，与注释/README 的「离线可跑」承诺相反）。
+
+**本轮显式不做（记录理由，防遗忘；均需拍板或各自锚点）**：
+
+- `rp` 缺失策略两路径对齐（Apple 路径「猜 `/ipp/print`」→ 与 mDNS 一致的
+  丢弃）：**属用户可见行为变更**（iOS 可见打印机集合会变），与「安全优先」
+  冲突，需显式拍板；现状已写入双 README 诚实清单第 6 条。
+- `DocumentEncoder` 真接入（需 `encode()` 接口细化）：属 0.8.x additive 提案
+  （见下），不在补丁版动接口。
+- mDNS 全局 deadline（收敛最坏耗时 `10s × N`）：本轮仅文档披露（第 7 条）。
+- 直投零拷贝（`bytes is Uint8List` 直接透出）与 426 TLS 升级记忆化：纯性能项，
+  各自需锚点，留待下轮。
+- PWG 5102.4 金标向量出处归档缺口（审计 P2-9）：`test/pwg_encoder_test.dart`
+  引用 §4.4.1 样例向量与 §4.4.2 Figure 3 的 87-octet 样本，但**未归档取自哪
+  一版规范**；本次离线取不到 PWG 5102.4 原文，故金标数值本身未对一手文本复核
+  （编码逻辑经逐字节演算 + CUPS `raster.h` 常量核对判定正确）。**待办**：网络
+  可达时补一次一手核对，回填「规范版本 + 日期 + 页/图号」。
 
 ### 0.8.x+ — 候选增强（封板后，additive-only）
 
@@ -277,5 +321,18 @@ job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收�
 - 能力判定只允许来自 TXT/IPP 确定性字段，禁止推断；
 - 协议行为改动必须有规范一手出处（RFC/PWG/IANA/Apple 官方文档）并同步
   README 标准对照表；
+- **引用纪律（0.7.2 新增）**：任何 RFC/PWG/IANA/Apple 条款引用，必须同时留存
+  **章节标题 + 原文片段**，不得只写节号——0.7.1 的「引用审计轮」自称「全部
+  对一手文本核验」，却把端口 631 的出处写成 §4.1（实为 §5；§4.1 的标题是
+  "Printer URI, Job URI, and Job ID"）。**引用审计不得自证已核验而无片段
+  支撑**；
+- **版本纪律（0.7.2 新增）**：对外版本串只能来自 `lib/src/version.dart` 常量；
+  发布时三处同改（pubspec / version.dart / 两个 podspec），漂移由
+  `test/version_consistency_test.dart` + CI 步骤发现。README 徽章一律用动态
+  CI 徽章——手写数字徽章已漂移三次（77 → 164），不再复用；
+- **格式门（0.7.2 新增）**：提交前 `dart format lib test`；CI 有
+  `dart format --output=none --set-exit-if-changed lib test` 门；
+- **新增锚点必做敏感性验证**：临时还原旧行为，确认新用例转红。0.7.2 实测：
+  `monitor()` 瞬态超时锚点在旧行为下转红（`git stash` 单文件后单跑该例）；
 - 真机验证记录注明机型与日期（如 EPSON L3250，2026-09-08 出纸验证）；
 - 发布日操作：移除 `publish_to: none` → `dart pub publish`（当前保持禁发防误发布）。

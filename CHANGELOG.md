@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] — 2026-09-12
+
+对外文档与版本链的**真实性收口**（CORE FREEZE 内的「正确性 / 测试 / 文档」
+变更，无公共 API 增删）。触发：0.7.1 全链审计报告（P0=0，问题集中在对外
+文档失真、版本链无单一真相源、多处引用错误）。
+
+### Added
+
+- **公共导出面锚点** `test/public_api_test.dart`：43 个公共类型经 barrel 的
+  编译期导出断言 + 3 个扩展方法入口 + `lib/src` 导出闭包静态闸（6 个内部
+  文件显式登记理由）+ `inspect()` 解析与超时错误映射 + `validateTicket()`
+  Facade 出口 + 10s 挂起防御锚点计数闸。（此前 17 个测试文件**全部** import
+  `src/` 内部路径，barrel 导出面回归在测试层完全不可见。）
+- **版本串单一真相源** `lib/src/version.dart` + `test/version_consistency_test.dart`：
+  User-Agent 改为引用常量；测试断言常量 == pubspec == 两个 podspec。
+- CI 新增两道门：`dart format --set-exit-if-changed lib test`；pubspec 与
+  两个 podspec 的版本一致性比对（独立于测试文件，防测试被误改后失守）。
+
+### Fixed
+
+- **`monitor()` 超时改为硬上界**：deadline 判定提至循环首。此前它只在查询
+  成功分支判定，瞬态异常分支（`continue`）绕过它——设备持续不可达时实际
+  耗时 = `timeout + 重试退避`，且抛 `SocketException` 而非文档承诺的
+  `IppJobTimeoutException`。新增瞬态路径锚点（敏感性已验证：还原旧行为该
+  用例转红；修复后耗时 < 30ms 即收口）。
+- **双 README 边界清单 2 条与实现相反**（对外失真，**低估**能力会劝退目标
+  用户）：①「不支持 PDF 直投」→ 0.4/0.5 已实现机会主义直投（声明集命中即
+  原样提交）；②「分辨率协商尚未实现，不发送 `printer-resolution`」→ 0.5 起
+  已下发。两条均改为与实现一致的表述，并补 2 条此前未披露的诚实条目
+  （两条发现通道的 `rp` 策略与超时语义不对称）。
+- **「Pure Dart, zero Flutter dependencies」为半真声明** → 改为准确表述
+  （协议内核纯 Dart；包整体是 Flutter 插件，Facade 级测试需 `flutter test`，
+  纯 `dart test` 只能加载协议内核子集）。
+- **RFC 错引更正**：端口 631 的出处 `RFC 8010 §4.1` → **§5**。一手核验：
+  §4.1 标题为 "Printer URI, Job URI, and Job ID"（与端口无关）；§5
+  "IPP URI Schemes" 原文载 "port 631 is the IANA-assigned well-known port
+  for the 'ipp' and 'ipps' schemes"；§4 章首另载 Printer MUST support
+  631。⚠️ 该错引由 0.7.1 的引用审计轮引入，且该轮声称「全部对一手文本
+  核验」——本版一并回改 0.7.0 / 0.7.1 条目内的同一错引（记录不应保留已知
+  错误），并新增一条流程约定：引用改动必须附原文片段（见 TODO.md）。
+- `example/main.dart` 定义了 `FakeDiscovery` 却未注入 → `printers.first`
+  运行即抛 `StateError`（而其文件头注释与 README 都称「离线可跑」）。改为
+  注入，并精确化注释（假发现层离线，probe 仍真的发包给假端点）。
+- podspec `s.version` `0.5.0` → `0.7.2`（同类漂移第二次复发，现由闸守住）。
+- 文档注释失真 2 处：`IppValue.values()` 注释自称「返回第一个组」而实现是
+  跨全部组拼接；PWG 编码器注释称同步字「由调用方 printPdf 写入」，实际写入
+  点是 `_prepareSubmission`。
+
+### Notes
+
+- README 测试徽章由手写数字（停在 `77`，实测已 164 例）改为**动态 CI 徽章**：
+  数字徽章已漂移三次，改为结构上不可漂移的 CI 状态徽章。
+- 双 README「26 standard attributes」精确化为「请求 26 个属性 → 解析为 27 个
+  能力字段」（两个数字都对，同名易混）。
+
 ## [0.7.1] — 2026-09-12
 
 CORE FREEZE 下的协议正确性补齐：print-quality（准入唯一标准 = IPP 内核
@@ -29,8 +84,11 @@ CORE FREEZE 下的协议正确性补齐：print-quality（准入唯一标准 = I
 
 - 测试 fixture resolution 值 tag 0x35（textWithLanguage）→ 0x32
   （resolution，RFC 8010 Table 1）——解析器 tag 无关，锚点弱化而非断裂。
-- 引用残留清扫：端口出处 RFC 2910/7472 → RFC 8010 §4.1 / RFC 7472
+- 引用残留清扫：端口出处 RFC 2910/7472 → RFC 8010 §5 / RFC 7472
   （2 处）；resolution 节号 §5.1.14 → §5.1.16（3 处注释）。
+  （本条原记为「RFC 8010 §4.1」，属错引——§4.1 的实际标题是
+  "Printer URI, Job URI, and Job ID"，631 出自 §5 "IPP URI Schemes"；
+  0.7.2 按一手原文回改。）
 - User-Agent `ipp_print/0.6` → `ipp_print/0.7`（0.7.0 期间漂移复发）。
 
 ## [0.7.0] — 2026-09-11
@@ -43,7 +101,7 @@ Access & CORE FREEZE：补最后一个入口缺口（手动直连），内核封
   mDNS 被屏蔽 / 跨网段 / 已知地址场景。URI 本身即 IPP endpoint 存在性的
   用户断言——`probe` / `print` / `submit` 的 TXT 分类否定门对该端点豁免，
   能力判定仍交实时查询 + 协商器终审（probe 驱动，manual 不放松 ready 判据）。
-  解析诚实：scheme 白名单 ipp/ipps/http/https；缺省端口按 RFC 8010 §4.1 /
+  解析诚实：scheme 白名单 ipp/ipps/http/https；缺省端口按 RFC 8010 §5 /
   RFC 7472
   （ipp/ipps = 631）与 HTTP 标准（80/443）；空路径 → `/`；带 query/fragment
   或缺 host → 拒绝（端点语义有歧义，不猜）。
