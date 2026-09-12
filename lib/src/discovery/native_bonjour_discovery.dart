@@ -15,6 +15,7 @@ import 'package:flutter/services.dart';
 import '../ipp/ipp_log.dart';
 import '../models.dart';
 import 'mdns_discovery.dart' show MDnsPrinterDiscovery;
+import 'resource_path.dart';
 
 /// 原生浏览端口（供测试伪造；生产绑定 MethodChannel）。
 abstract class BonjourNativeApi {
@@ -89,20 +90,36 @@ class NativeBonjourDiscovery implements PrinterDiscovery {
     return out.values.toList(growable: false);
   }
 
-  /// 原生记录 → [DiscoveredPrinter]（缺关键字段即跳过，不猜）。
+  /// 原生记录 → [DiscoveredPrinter]；`name`/`host`/`port` 或**资源路径**
+  /// 缺失即跳过（返回 null），不猜。
+  ///
+  /// 资源路径走 [resolveResourcePath] —— 与 `multicast_dns` 路径（
+  /// `RecordAssembler.assemble`）**共用同一单源策略**。0.7.3 之前此处兜底
+  /// `/ipp/print`，而 `multicast_dns` 路径同时丢弃：同一契约两份实现各自
+  /// 演化（本项目头号缺陷源）。兜底之所以撤掉：Apple WWDC 2016 S725 的
+  /// 「多数 AirPrint 打印机资源路径为 ipp/print」说的是打印机整体，不足以
+  /// 支撑对**省略 rp 的子集**下断言，而 CUPS 参考实现从不据 `rp` 推导路径。
+  ///
+  /// TXT 键归一小写：原生侧 `NetService.dictionary(fromTXTRecord:)` 保留线路
+  /// 原样大小写，而 RFC 6763 §6.2 规定键大小写不敏感、`DiscoveredPrinter.txt`
+  /// 亦明文声明小写键。故**不能**只依赖原生侧用字面量 `"rp"` 抽出的便利字段。
   DiscoveredPrinter? _assemble(Map<Object?, Object?> item) {
     final name = item['name'];
     final host = item['host'];
     final port = item['port'];
     if (name is! String || host is! String || port is! int) return null;
-    final rp = item['rp'];
     final txtRaw = item['txt'];
     final txt = txtRaw is Map
-        ? txtRaw.map((k, v) => MapEntry(k.toString(), v.toString()))
+        ? <String, String>{
+            for (final e in txtRaw.entries)
+              e.key.toString().toLowerCase(): e.value.toString(),
+          }
         : const <String, String>{};
-    final path = rp is String && rp.isNotEmpty
-        ? (rp.startsWith('/') ? rp : '/$rp')
-        : '/ipp/print';
+    // 优先已归一的 TXT 原值（大小写不敏感），回退原生侧抽取的便利字段。
+    final rp =
+        txt['rp'] ?? (item['rp'] is String ? item['rp'] as String : null);
+    final path = resolveResourcePath(rp);
+    if (path == null) return null;
     return DiscoveredPrinter(
       name: name,
       host: host,

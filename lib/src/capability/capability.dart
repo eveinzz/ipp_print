@@ -1,5 +1,6 @@
 import 'dart:io' show InternetAddress;
 
+import '../discovery/resource_path.dart';
 import '../models.dart';
 
 /// 确定性能力分类器：只依据打印机自报字段，任何分支都有记录依据。
@@ -74,6 +75,9 @@ class RecordAssembler {
   final bool requireIpv4;
 
   /// 返回 null 表示记录不完整（缺少 SRV 或资源路径），该实例应被跳过。
+  ///
+  /// 资源路径判定走 [resolveResourcePath]（两条通道共用的单源策略）：
+  /// TXT `rp` 缺失或为空 ⇒ 跳过，不用猜出来的路径冒充已知。
   DiscoveredPrinter? assemble(InstanceRecords r) {
     final target = r.srvTarget;
     final port = r.srvPort;
@@ -81,8 +85,8 @@ class RecordAssembler {
     final txt = r.txtRaw == null
         ? const <String, String>{}
         : CapabilityClassifier.parseTxtBytes(r.txtRaw!);
-    final rp = txt['rp'];
-    if (rp == null || rp.isEmpty) return null;
+    final path = resolveResourcePath(txt['rp']);
+    if (path == null) return null;
     final rawHost = r.ipv4?.address ?? target;
     final host = rawHost.endsWith('.')
         ? rawHost.substring(0, rawHost.length - 1)
@@ -93,7 +97,7 @@ class RecordAssembler {
       name: r.instanceName,
       host: host,
       port: port,
-      resourcePath: rp.startsWith('/') ? rp : '/$rp',
+      resourcePath: path,
       uuid: txt['uuid'],
       secure: r.secure,
       txt: txt,

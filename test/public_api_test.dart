@@ -150,6 +150,9 @@ const _internalOnly = <String>{
   'lib/src/capability/capability_validator.dart',
   // 调试日志：内核内部诊断通道，非宿主 API。
   'lib/src/ipp/ipp_log.dart',
+  // 发现层资源路径策略单源：两条发现通道**内部**共用（供 capability 与
+  // native_bonjour 同时 import），非宿主 API；导出它只会给公共面添噪声。
+  'lib/src/discovery/resource_path.dart',
   // 版本常量：供内核内部（User-Agent）与测试使用；CORE FREEZE 下不新增
   // 公共面，故不进 barrel。
   'lib/src/version.dart',

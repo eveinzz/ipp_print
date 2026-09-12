@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.3] — 2026-09-12
+
+发现层**资源路径策略单源化**：两条发现通道（`multicast_dns` / 原生 Bonjour）
+对「TXT `rp` 缺失或为空」给出同一判定 —— **跳过该实例，绝不造路径**。此前
+两者相反（原生兜底 `/ipp/print`），属同契约双实现漂移（本项目头号缺陷源）。
+
+### Changed
+
+- **原生 Bonjour 路径不再兜底 `/ipp/print`**：`rp` 缺失/为空 ⇒ 跳过实例。
+  规范依据（一手核对）：Apple *Bonjour Printing Specification* v1.2.1 Table 2
+  给 `rp` 的默认值是空串，且「值等于默认值的键 MAY 省略」→ `rp` **可被合法
+  省略**；PWG 5100.14 *IPP Everywhere* p.22 则要求打印机 **MUST** 提供 `rp`
+  → 省略者必然不是合规设备，其真实路径无从得知。CUPS 参考实现亦从不据 `rp`
+  推导路径（`backend/dnssd.c`、`cups/dnssd.c`、`cups/dest.c`、`backend/ipp.c`、
+  `cups/http.c` 对 `"rp"` 零命中），macOS 把路径解析推迟到连接期，故「多数
+  AirPrint 打印机资源路径为 ipp/print」（Apple WWDC 2016 S725）不足以支撑对
+  **省略 `rp` 的子集**下断言。造路径 = 把「未知」写成「已知」：设备会出现在
+  列表里，却在打印时以难以归因的错误失败。
+- **影响面**：仅限「广播 IPP 但不广播 `rp`」的非合规设备。真机实测（EPSON
+  L3250，2026-09-12）TXT 含 `rp=ipp/print`，行为不变。代价可逆 —— 此类设备
+  仍可用 `IppPrint.addEndpoint` 显式添加（手动端点即用户的断言，模型对其有
+  明文豁免）。
+
+### Fixed
+
+- **原生路径 TXT 键未归一小写**：`NetService.dictionary(fromTXTRecord:)` 保留
+  线路原样大小写，而 Swift 侧用字面量 `"rp"` 抽取、Dart 侧原样透传 —— 大写
+  `RP=` 的**合法**设备会抽取失败（RFC 6763 §6.2 规定 TXT 键大小写不敏感）。
+  现 Dart 侧统一归一小写，同时满足 `DiscoveredPrinter.txt` 明文声明的「小写
+  键」契约（此前该契约在原生路径可被违反）。
+
+### Added
+
+- `test/discovery_rp_policy_test.dart`：**跨路径契约锚点** —— 把同一条线路
+  TXT 记录同时喂给两条路径，逐格断言「跳过 / 路径」判定一致（无 TXT / 空值 /
+  规范形态 / 带前导斜杠 / 大写键 / 有 TXT 但无 `rp`）＋策略单源真值表。
+- `lib/src/discovery/resource_path.dart`：策略单源（内核内部，不进 barrel）。
+- 原生路径新增锚点 4 例：`rp` 缺失 → 跳过 / `rp` 空串 → 跳过 / 大写 `RP=`
+  → 解析出真实路径（值刻意区别于旧兜底，旧行为必然给错）/ 键归一小写。
+- 双 README 诚实清单第 6 条改写：由「两条通道严格度不同」改为「绝不造资源
+  路径」+ 大小写不敏感说明。
+
+**敏感性验证**：临时还原 `native_bonjour_discovery.dart` 旧行为 → 新增锚点
+6 例转红，恢复后全绿。
+
 ## [0.7.2] — 2026-09-12
 
 对外文档与版本链的**真实性收口**（CORE FREEZE 内的「正确性 / 测试 / 文档」

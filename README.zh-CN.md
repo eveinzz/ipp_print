@@ -268,7 +268,7 @@ HP 官方 [jipp](https://github.com/HPInc/jipp) 与 istopwg 指南
 3. **PDF 直投是机会主义的，不是保证** —— 仅当打印机在 `document-format-supported` 中**声明**该 MIME（实时查询，不用缓存的 probe 结果）才原样提交；否则回退 `image/pwg-raster`，需要注入 `PdfRasterizer` 且源文档为 PDF；两者都未声明则如实拒绝（IPP Everywhere 中 PDF 仅为 SHOULD）。
 4. **分辨率 / 色彩模式 / 打印质量只在显式指定时下发** —— `null` 即不下发该属性，由打印机应用自身 `*-default`（RFC 8011 §5.2）。栅格 dpi 默认 300，而 300 **并非**所有打印机的 `printer-resolution-supported` 成员（真机事实：EPSON L3250 仅声明 `360x360dpi` / `1440x720dpi`）——请从 `PrinterInfo.resolutionsSupported` 协商，或用 `printPdf(dpi: …)` 按次覆盖。PWG 页头固定 sRGB-8。
 5. **不接管 AirPrint 机型** —— 分类为 `airPrint` 的设备交还系统打印面板。
-6. **两条发现通道的严格度不同** —— `multicast_dns` 路径（Android / Linux / Windows）会丢弃 TXT 记录缺 `rp` 的实例；原生 Bonjour 路径（iOS / macOS）在缺 `rp` 时回退 `/ipp/print`。因此一台广播 IPP 但不广播 `rp` 的打印机可能**在 iOS/macOS 可见、在 Android/Linux/Windows 不可见**。（合规的 Bonjour 打印机会广播 `rp`（如 L3250），故只影响不合规设备。两条策略的对齐已记入 [TODO.md](TODO.md)。）
+6. **绝不凭猜造资源路径** —— 广播 IPP 但 `rp` TXT 值不可用（缺失或为空）的服务，在**两条通道上都被跳过**；此类打印机请用 `addEndpoint` 显式添加。此前两者相反：原生 Bonjour 路径兜底 `/ipp/print`，而 `multicast_dns` 路径丢弃实例——同一台打印机会**在 iOS/macOS 可见、在 Android/Linux/Windows 不可见**。`rp` 在 Bonjour 打印中可省略，但在 IPP Everywhere（PWG 5100.14）中是 **MUST**，故受影响设备必然非合规，其真实路径我们无从得知——猜一个只会让设备先出现、再在打印时失败。TXT 键按大小写不敏感匹配（RFC 6763 §6.2）。
 7. **两条发现通道的超时语义不同** —— 原生浏览器由单一硬 deadline 约束；`MDnsPrinterDiscovery` 逐实例串行解析，最坏耗时约为 `10 秒 × 实例数`，而非请求的 timeout。
 
 ## FAQ

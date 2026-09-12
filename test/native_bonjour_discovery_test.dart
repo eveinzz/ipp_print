@@ -1,7 +1,9 @@
 // 原生 Bonjour 发现适配器测试（纯 package:test，端口伪造，不触网）。
 //
 // 锚点：记录组装字段映射 / identity 去重偏好（明文优先）/
-// 关键字段缺失跳过不猜 / 通道错误如实传播。
+// 关键字段缺失跳过不猜 / 资源路径策略（缺失即跳过，不造假路径）/
+// TXT 键大小写不敏感（RFC 6763 §6.2）与键归一小写契约 /
+// 通道错误如实传播。
 import 'package:ipp_print/src/discovery/native_bonjour_discovery.dart';
 import 'package:test/test.dart';
 
@@ -84,11 +86,42 @@ void main() {
     expect(printers.single.name, 'OK');
   });
 
-  test('rp 缺失 → 默认 /ipp/print，不凭空造厂商路径', () async {
-    final api = _FakeApi([_rec(rp: null)]);
+  test('rp 缺失 → 跳过，不造假路径（两条通道同解，见 discovery_rp_policy_test）', () async {
+    final api = _FakeApi([
+      _rec(rp: null, txt: {'pdl': 'image/pwg-raster'}),
+    ]);
     final printers = await NativeBonjourDiscovery(api: api).discover();
 
-    expect(printers.single.resourcePath, '/ipp/print');
+    expect(printers, isEmpty);
+  });
+
+  test('rp 为空串 → 跳过（Apple 规范里 rp 的默认值即空串，等同缺失）', () async {
+    final api = _FakeApi([
+      _rec(rp: '', txt: {'pdl': 'image/pwg-raster'}),
+    ]);
+    expect(await NativeBonjourDiscovery(api: api).discover(), isEmpty);
+  });
+
+  test('TXT 键大小写不敏感：大写 RP= 也能解析出真实路径', () async {
+    // 原生侧 NetService.dictionary 保留线路原样大小写，Swift 抽取只认字面量
+    // "rp" → 大写键时便利字段必缺。此处 rp 值刻意与旧兜底 /ipp/print 不同，
+    // 故旧行为（造路径）会给出错误结果而非碰巧正确。
+    final api = _FakeApi([
+      _rec(rp: null, txt: {'pdl': 'image/pwg-raster', 'RP': 'ipp/queue'}),
+    ]);
+    final printers = await NativeBonjourDiscovery(api: api).discover();
+
+    expect(printers.single.resourcePath, '/ipp/queue');
+  });
+
+  test('TXT 键归一为小写（DiscoveredPrinter.txt 契约）', () async {
+    final api = _FakeApi([
+      _rec(txt: {'PDL': 'image/pwg-raster', 'rp': 'ipp/print'}),
+    ]);
+    final txt = (await NativeBonjourDiscovery(api: api).discover()).single.txt;
+
+    expect(txt.keys, contains('pdl'));
+    expect(txt.keys, isNot(contains('PDL')));
   });
 
   test('原生通道错误如实传播（宿主呈现 discoveryError，不静默伪装空态）', () async {
