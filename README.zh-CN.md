@@ -67,13 +67,19 @@ flowchart TB
     C -->|"有 URF"| D["airPrint<br/>交还系统打印面板"]
     C -->|"pdl 含 image/pwg-raster"| E["ippDirect<br/>可由本包直连打印"]
     C -->|"仅厂商私有格式"| F["vendorOnly<br/>引导用户使用厂商 App"]
+    U["addEndpoint(Uri)<br/>手动端点（0.7）—— 无需 mDNS"]
     subgraph P["IPP 直连管线"]
-      E --> G["probe：Get-Printer-Attributes<br/>（介质 / 色彩 / 状态）"]
-      G --> H["PDF 栅格页<br/>（宿主注入的 PdfRasterizer）"]
-      H --> I["PWG-raster 编码<br/>（PWG 5102.4）"]
-      I --> J["IPP Print-Job<br/>ipp:// 或 ipps://（TLS）"]
-      J --> K["作业生命周期：<br/>状态轮询 / Get-Jobs / Cancel-Job"]
+      G["实时能力查询：Get-Printer-Attributes<br/>（文档格式 / 介质 / 色彩 / 双面 / 状态）"]
+      G --> N{"协商（DocumentFormatNegotiator）：<br/>打印机是否声明该 MIME？"}
+      N -->|"已声明"| T["直通发送<br/>字节原样——矢量 / 文本保留"]
+      N -->|"未声明"| R["栅格回退（PDF 源）<br/>宿主注入的 PdfRasterizer → 逐页<br/>→ PWG-raster 编码（PWG 5102.4）<br/>份数在文档层重复"]
+      N -->|"均不满足"| X["拒绝，绝不猜测"]
+      T --> J["IPP Print-Job / Create-Job + Send-Document<br/>ipp:// 或 ipps://（TLS）"]
+      R --> J
+      J --> K["作业生命周期：<br/>状态轮询 / Get-Jobs / Cancel-Job<br/>进度计数器：impressions / media-sheets completed（0.8）"]
     end
+    E --> G
+    U --> G
 ```
 
 ## 安装

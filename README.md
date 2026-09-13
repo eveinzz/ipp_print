@@ -68,13 +68,19 @@ flowchart TB
     C -->|"URF present"| D["airPrint<br/>hand over to the OS print panel"]
     C -->|"pdl contains image/pwg-raster"| E["ippDirect<br/>printable by this package"]
     C -->|"vendor formats only"| F["vendorOnly<br/>guide user to vendor app"]
+    U["addEndpoint(Uri)<br/>manual endpoint (0.7) — no mDNS required"]
     subgraph P["IPP direct pipeline"]
-      E --> G["probe: Get-Printer-Attributes<br/>(media / color / state)"]
-      G --> H["PDF raster pages<br/>(host-injected PdfRasterizer)"]
-      H --> I["PWG-raster encoding<br/>(PWG 5102.4)"]
-      I --> J["IPP Print-Job<br/>ipp:// or ipps:// (TLS)"]
-      J --> K["job lifecycle:<br/>state polling / Get-Jobs / Cancel-Job"]
+      G["live capability query: Get-Printer-Attributes<br/>(document formats / media / color / duplex / state)"]
+      G --> N{"negotiate (DocumentFormatNegotiator):<br/>printer declares the MIME?"}
+      N -->|"declared"| T["direct pass-through<br/>verbatim bytes — vector / text preserved"]
+      N -->|"not declared"| R["raster fallback (PDF source)<br/>host-injected PdfRasterizer → pages<br/>→ PWG-raster encode (PWG 5102.4)<br/>copies repeated in-document"]
+      N -->|"neither"| X["rejected, never guessed"]
+      T --> J["IPP Print-Job / Create-Job + Send-Document<br/>ipp:// or ipps:// (TLS)"]
+      R --> J
+      J --> K["job lifecycle:<br/>state polling / Get-Jobs / Cancel-Job<br/>progress counters: impressions / media-sheets completed (0.8)"]
     end
+    E --> G
+    U --> G
 ```
 
 ## Install
