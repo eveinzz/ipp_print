@@ -91,6 +91,24 @@ void main() {
     return null;
   }
 
+  /// 独立线格式步进器（不依赖被测解析代码）：列出报文中的全部属性名。
+  List<String> attributeNames(List<int> body) {
+    final names = <String>[];
+    var i = 8; // version(2) + op(2) + request-id(4)
+    while (i < body.length) {
+      final tag = body[i++];
+      if (tag == 0x03) break; // end-of-attributes-tag
+      if (tag <= 0x0F) continue; // group delimiter
+      final nameLen = (body[i] << 8) | body[i + 1];
+      i += 2;
+      names.add(String.fromCharCodes(body.sublist(i, i + nameLen)));
+      i += nameLen;
+      final valueLen = (body[i] << 8) | body[i + 1];
+      i += 2 + valueLen;
+    }
+    return names;
+  }
+
   Future<Uint8List> submitWithCopies(int copies) async {
     final client = FakeQueueClient();
     client.enqueue(0x000B, printerPwgOnly);
@@ -195,6 +213,69 @@ void main() {
       expect(intAttrValue(body, 'copies'), 2);
       expect(body.sublist(body.length - pdf.length), pdf);
     });
+  });
+
+  // ── _withCopies 的字段完整性 ──────────────────────────────
+  // 栅格路径经 `_withCopies` 重建 PrintOptions（把 copies 归一为 1）。该辅助
+  // 函数**手工罗列全部字段**（模型无 copyWith），一旦模型新增字段而此处漏改，
+  // 新字段会在栅格路径**静默丢弃**——与 0.7.4 的 `0x0001` 静默忽略同族，
+  // 且正属本项目头号缺陷类（声明层 vs 实现层脱节）。
+  // 本锚点锁死：全部非份数属性在**栅格与直投两条路径**都必须存活。
+  test('两条路径均不得丢失任何非份数作业属性（_withCopies 字段完整性）', () async {
+    const ticket = PrintTicket(
+      copies: 3,
+      media: 'iso_a4_210x297mm',
+      colorMode: 'monochrome',
+      sides: 'two-sided-long-edge',
+      resolution: '300x300dpi',
+      fidelity: PrintFidelity.exact,
+      printQuality: 4,
+    );
+    const expected = <String>[
+      'media',
+      'print-color-mode',
+      'sides',
+      'printer-resolution',
+      'ipp-attribute-fidelity',
+      'print-quality',
+    ];
+
+    final rasterClient = FakeQueueClient();
+    rasterClient.enqueue(0x000B, printerPwgOnly);
+    rasterClient.enqueue(0x0002, jobSubmitted);
+    await IppPrint(client: rasterClient).submit(
+      document: PrintDocument(
+        bytes: Uint8List.fromList([1, 2, 3]),
+        mimeType: 'application/pdf',
+      ),
+      printer: discoveredPrinter(),
+      rasterizer: _ListRasterizer([red, red]),
+      ticket: ticket,
+    );
+    final rasterNames = attributeNames(printJobBody(rasterClient));
+    for (final name in expected) {
+      expect(rasterNames, contains(name),
+          reason: '栅格路径丢失 job 属性 $name —— _withCopies 漏抄了它？');
+    }
+    // 本锚点不放松 0.7.4 契约：份数仍当归一为 1。
+    expect(intAttrValue(printJobBody(rasterClient), 'copies'), 1);
+
+    final directClient = FakeQueueClient();
+    directClient.enqueue(0x000B, printerPdfOnly);
+    directClient.enqueue(0x0002, jobSubmitted);
+    await IppPrint(client: directClient).submit(
+      document: PrintDocument(
+        bytes: Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+        mimeType: 'application/pdf',
+      ),
+      printer: discoveredPrinter(),
+      ticket: ticket,
+    );
+    final directNames = attributeNames(printJobBody(directClient));
+    for (final name in expected) {
+      expect(directNames, contains(name), reason: '直投路径丢失 job 属性 $name');
+    }
+    expect(intAttrValue(printJobBody(directClient), 'copies'), 3);
   });
 }
 

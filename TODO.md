@@ -379,6 +379,14 @@ job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收�
 - [x] 锚点 `test/copies_test.dart` 5 例（属性值由**独立线格式步进器**读取，
   不依赖被测解析代码）；**敏感性验证**：还原旧实现 → 2 例转红。全量
   **187 例**绿（原 182 + 5），analyze 零告警，`dart format` 零差异。
+- [x] **字段完整性锚点（2026-09-13 补，消费方审计轮）**：`_withCopies` **手工罗列
+  `PrintOptions` 全部字段**（模型无 `copyWith`）⇒ 模型新增字段而此处漏抄即
+  **静默丢弃** —— 与 `0x0001` 静默忽略同族，且正属本项目头号缺陷类（声明层 vs
+  实现层脱节）。新增 1 例，覆盖**栅格与直投两条路径**的 6 个非份数属性
+  （`media` / `print-color-mode` / `sides` / `printer-resolution` /
+  `ipp-attribute-fidelity` / `print-quality`）。**敏感性验证**：移除
+  `printQuality` → **`+5 -1`**，仅该例转红。**纯测试新增，不改变发布产物，
+  故不提升版本号**（版本链四处仍为 0.7.5）；全量 **194 例**绿。
 - [x] 双 README：Job options `copies` 行改写 + 诚实清单第 8 条新增。
 - [x] 版本 0.7.3 → 0.7.4（pubspec / 双 podspec / `version.dart` 四处一致，
   由既有版本链闸保证）。
