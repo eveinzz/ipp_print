@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""Commit message language gate -- this repository's history is English only.
+
+One implementation, two entry points (no second copy to drift out of sync):
+
+    commit-msg <message-file>     git hook mode, validates a single message
+    --range <rev-range>           CI mode, validates every commit in the range
+
+Exits 1 and names the offending characters when CJK text is found.
+Non-ASCII punctuation used by the English messages (for example the section
+sign U+00A7) is deliberately allowed; only CJK ranges are rejected.
+
+Installed via:  git config core.hooksPath .githooks
+"""
+
+import re
+import subprocess
+import sys
+
+CJK = re.compile(
+    "["
+    "\u3000-\u303f"  # CJK symbols and punctuation
+    "\u3400-\u4dbf"  # CJK unified ideographs extension A
+    "\u4e00-\u9fff"  # CJK unified ideographs
+    "\uf900-\ufaff"  # CJK compatibility ideographs
+    "\uff00-\uffef"  # fullwidth forms
+    "]"
+)
+
+
+def report(label, text):
+    """Return True when the message is clean, False (and explain) otherwise."""
+    found = sorted(set(CJK.findall(text)))
+    if not found:
+        return True
+    lines = [line for line in text.strip().splitlines() if line.strip()]
+    first = lines[0][:80] if lines else "(empty)"
+    print("::error::non-English (CJK) commit message in %s: %s" % (label, first))
+    print("         offending characters: %s" % " ".join(found[:12]))
+    return False
+
+
+def check_file(path):
+    with open(path, "r", encoding="utf-8", errors="replace") as handle:
+        text = handle.read()
+    # Drop the commented template block git leaves in COMMIT_EDITMSG.
+    kept = [line for line in text.splitlines() if not line.startswith("#")]
+    return report("commit message file", "\n".join(kept))
+
+
+def check_range(rev_range):
+    shas = subprocess.run(
+        ["git", "rev-list", rev_range], capture_output=True, text=True
+    ).stdout.split()
+    if not shas:
+        print("commit message language OK (no commits in %s)" % rev_range)
+        return True
+    ok = True
+    for sha in shas:
+        body = subprocess.run(
+            ["git", "log", "-1", "--format=%B", sha], capture_output=True, text=True
+        ).stdout
+        if not report(sha[:8], body):
+            ok = False
+    if ok:
+        print("commit message language OK (%d commit(s) in %s)" % (len(shas), rev_range))
+    return ok
+
+
+def main(argv):
+    if len(argv) == 3 and argv[1] == "--range":
+        return 0 if check_range(argv[2]) else 1
+    if len(argv) == 2 and argv[1] != "--range":
+        return 0 if check_file(argv[1]) else 1
+    print(
+        "usage: commit-msg <message-file> | --range <rev-range>",
+        file=sys.stderr,
+    )
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

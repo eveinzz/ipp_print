@@ -35,3 +35,28 @@ jobs:
           echo "version chain OK: $pub_version"
       - run: flutter analyze
       - run: flutter test
+
+  commit-message-language:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # 需要历史以取推送区间；浅克隆拿不到 before 提交。
+          fetch-depth: 0
+      # 规范闸（0.7.5）：提交信息一律英文 —— 仓库历史 43 条全英文，0.7.4 混入过
+      # 一条中文（已改写）。与本地钩子共用同一脚本 .githooks/commit-msg，
+      # 单实现两入口，避免「同契约双实现漂移」。
+      # 注意：本闸只约束「提交信息」；代码注释与双语文档不受影响。
+      - name: Commit messages must be English (no CJK)
+        run: |
+          set -eu
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="origin/${{ github.base_ref }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+          if ! git rev-parse --verify -q "$base" >/dev/null 2>&1; then
+            echo "base '$base' unknown (first push / force push) -> checking full history"
+            base=""
+          fi
+          python3 .githooks/commit-msg --range "${base:+$base..}HEAD"
