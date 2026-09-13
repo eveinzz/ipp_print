@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] — 2026-09-13
+
+### Added
+
+- **作业页计数器透传（RFC 8011 §5.3.18 Job Progress）**：`IppJobSummary` 与
+  `PrintJob` 新增 `impressionsCompleted`（§5.3.18.2 `job-impressions-completed`）
+  与 `mediaSheetsCompleted`（§5.3.18.3 `job-media-sheets-completed`），
+  `getJob` / `getJobs` / `monitor`（经 `withSummary`）全程携带；
+  `Get-Jobs` 内置请求集（内核私有常量）与 `Get-Job-Attributes`
+  默认请求同步补上这两个计数器。
+  **透传原始计数，绝不合成「页」**：impression 是 media sheet 的一面
+  （§2.3.4），份数/双面/N-up 下不等于本地页数——「第 X 页 / 共 Y 页」的
+  换算属宿主职责（分母 Y 须宿主本地提供，打印机一般不回 `job-impressions`）。
+  缺省 / out-of-band（`no-value`，L3250 真机实测形态）如实为 null；
+  PWG 5100.14 v1.1 Table 11 将 `job-impressions-completed`（连同
+  `job-impressions`）列为 IPP Everywhere Required，免驱认证机型必回；
+  `job-media-sheets-completed` 仅 RFC 8011 §5.3.18.3 RECOMMENDED
+  （Table 11 不含它）。轮询语义：打印机不再报计数时 `withSummary`
+  **保留上次值**（进度只前进不回退）。
+
 ## [0.7.6] — 2026-09-13
 
 ### Fixed
@@ -22,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   语义相反**：`Get-Jobs` 缺省 = `job-uri` + `job-id`（**§4.2.6.1**），
   `Get-Job-Attributes` 缺省 = **all**（**§4.3.4.1**）。本包源码注释曾把后者
   当作共同表述（「null 则省略（默认 all）」），已一并更正。
-  修法：缺省改发内置集 `IppCodec.defaultJobAttributeSet`（覆盖 `IppJobSummary`
+  修法：缺省改发内置属性集（内核私有，覆盖 `IppJobSummary`
   全部契约字段），与参考实现 CUPS `backend/ipp.c` 的 `jattrs[]` 显式列全同姿势。
   **公共 API 零变更**：`requestedAttributes` 参数本身不变，仅「null = 省略」
   改为「null = 内置集」（与同库 `buildGetPrinterAttributes` 既有语义一致）。

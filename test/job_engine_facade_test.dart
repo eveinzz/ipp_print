@@ -65,6 +65,15 @@ void main() {
       expect(s.stateReasons,
           ['job-completed-successfully', 'resources-are-not-ready']);
     });
+
+    test('getJob 解析页计数器：实值透传、no-value 宽容为 null（0.8.0）', () async {
+      client.enqueue(0x0009, jobSnapshotCounters);
+      final s = await client.getJob(testPrinter(), 42);
+      // 实值：原样透传，不做任何「页」换算。
+      expect(s.impressionsCompleted, 7);
+      // no-value（L3250 真机形态）：宽容解码为 null，绝不抛。
+      expect(s.mediaSheetsCompleted, isNull);
+    });
   });
 
   group('Job Engine Facade（submit / monitor / getJob / cancel）', () {
@@ -186,6 +195,22 @@ void main() {
       client.enqueue(0x0008, resp(0, 0x01, const []));
       await ipp.cancel(submittedJob!);
       expect(client.operations.last, IppCodec.opCancelJob);
+    });
+
+    test('Facade getJob 快照携带页计数器（0.8.0 透传链终点）', () async {
+      client.enqueue(0x0009, jobSnapshotCounters);
+      final job = await ipp.getJob(testPrinter(), 42);
+      expect(job.impressionsCompleted, 7);
+      expect(job.mediaSheetsCompleted, isNull);
+
+      // withSummary 刷新：新值覆盖旧值；打印机不再报（缺省）则保留旧值
+      // ——进度显示「只前进不回退」的宿主侧友好语义。
+      client.enqueue(0x0009, jobSnapshot(state: 5));
+      final advanced = job.withSummary(
+        const IppJobSummary(jobId: 42, jobState: IppJobState.processing),
+      );
+      expect(advanced.impressionsCompleted, 7);
+      expect(advanced.mediaSheetsCompleted, isNull);
     });
   });
 }

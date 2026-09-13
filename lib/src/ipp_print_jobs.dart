@@ -317,6 +317,8 @@ class _JobEngine {
       state: s.jobState,
       stateReasons: s.stateReasons,
       jobName: s.jobName,
+      impressionsCompleted: s.impressionsCompleted,
+      mediaSheetsCompleted: s.mediaSheetsCompleted,
     );
   }
 

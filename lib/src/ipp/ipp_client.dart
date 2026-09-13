@@ -9,55 +9,7 @@ import 'ipp_message.dart';
 part 'ipp_client_inspect.dart';
 part 'ipp_client_validate.dart';
 part 'ipp_client_wire_log.dart';
-
-/// job-state 枚举（RFC 8011 §5.3.7 / IPP Guide：3 pending、4 pending-held、
-/// 5 processing、6 processing-stopped、7 canceled、8 aborted、9 completed）。
-enum IppJobState {
-  unknown(-1),
-  pending(3),
-  pendingHeld(4),
-  processing(5),
-  processingStopped(6),
-  canceled(7),
-  aborted(8),
-  completed(9);
-
-  const IppJobState(this.code);
-  final int code;
-
-  bool get isTerminal =>
-      this == canceled || this == aborted || this == completed;
-
-  /// 未知值如实映射 [unknown]（0.4.1 修复：原 orElse→pending 属静默猜测，
-  /// 违反「缺≠支持、绝不推断」纪律）；unknown 非终态，轮询方继续查询。
-  static IppJobState fromCode(int code) => IppJobState.values
-      .firstWhere((s) => s.code == code, orElse: () => IppJobState.unknown);
-}
-
-/// Get-Jobs / Get-Job-Attributes / Print-Job 响应的单个作业摘要。
-class IppJobSummary {
-  const IppJobSummary({
-    required this.jobId,
-    required this.jobState,
-    this.jobName,
-    this.userName,
-    this.stateReasons = const <String>[],
-  });
-
-  final int jobId;
-  final IppJobState jobState;
-
-  /// job-name（作业提交时的名字）。
-  final String? jobName;
-
-  /// job-originating-user-name（提交者）。
-  final String? userName;
-
-  /// job-state-reasons（RFC 8011 §5.3.8，1setOf keyword，如 `media-jam` /
-  /// `job-incoming` / `job-completed-successfully`）：作业级透传，
-  /// 上层错误页语义必需；原始 keyword 不做解释映射（缺 = 空集）。
-  final List<String> stateReasons;
-}
+part 'ipp_job_models.dart';
 
 /// IPP 传输客户端：POST application/ipp 到打印机 631 端口
 /// （明文 ipp:// 或 TLS ipps:// 通道，由 [DiscoveredPrinter.secure] 决定）。
@@ -251,6 +203,9 @@ class IppClient {
             in jobGroup.attributes['job-state-reasons'] ?? const <IppValue>[])
           v.asString,
       ],
+      // 页计数器（0.8.0）：_intOf 走宽容解码，缺省/no-value 如实 null。
+      impressionsCompleted: _intOf(jobGroup, 'job-impressions-completed'),
+      mediaSheetsCompleted: _intOf(jobGroup, 'job-media-sheets-completed'),
     );
   }
 
@@ -300,8 +255,8 @@ class IppClient {
   ///
   /// [whichJobs]：'not-completed'（默认，活动队列）或 'completed'。
   /// [myJobs]：true 时只返回 requesting-user-name 对应用户的作业。
-  /// [requestedAttributes]：请求的作业属性集；null（默认）用
-  /// [IppCodec.defaultJobAttributeSet]。
+  /// [requestedAttributes]：请求的作业属性集；null（默认）用内核内置集
+  /// （Get-Jobs 请求单源，见 `IppCodec.buildGetJobs` 文档）。
   ///
   /// ⚠️ 该属性**不可省略**：§4.2.6.1 的缺省语义是「Printer MUST 按客户端
   /// 只给了 `job-uri` 与 `job-id` 响应」——与 Get-Job-Attributes 的
@@ -347,6 +302,9 @@ class IppClient {
               in g.attributes['job-state-reasons'] ?? const <IppValue>[])
             v.asString,
         ],
+        // 页计数器（0.8.0）：同 getJob，缺省/no-value 如实 null。
+        impressionsCompleted: _intOf(g, 'job-impressions-completed'),
+        mediaSheetsCompleted: _intOf(g, 'job-media-sheets-completed'),
       ));
     }
     return summaries;

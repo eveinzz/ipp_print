@@ -17,6 +17,8 @@ class PrintJob {
     this.stateReasons = const <String>[],
     this.jobName,
     this.documentFormat,
+    this.impressionsCompleted,
+    this.mediaSheetsCompleted,
   });
 
   /// IPP 作业号（打印机分配）。
@@ -38,6 +40,16 @@ class PrintJob {
   /// 提交时协商出的 document-format（本地记录，打印机快照不含此属性）。
   final String? documentFormat;
 
+  /// job-impressions-completed（RFC 8011 §5.3.18.2，0.8.0 起快照携带）：
+  /// 已完成 impression 计数。**透传原始值**——impression 是 sheet 的一面
+  /// （§2.3.4），份数/双面/N-up 下不等于本地页数，换算属宿主职责。
+  /// 缺省/no-value → null。
+  final int? impressionsCompleted;
+
+  /// job-media-sheets-completed（RFC 8011 §5.3.18.3）：已完成 media sheet
+  /// 计数。语义同 [impressionsCompleted]：只透传、不换算、缺省 null。
+  final int? mediaSheetsCompleted;
+
   /// 是否终态（completed / aborted / canceled）。
   bool get isTerminal => state.isTerminal;
 
@@ -49,6 +61,8 @@ class PrintJob {
         stateReasons: s.stateReasons,
         jobName: s.jobName ?? jobName,
         documentFormat: documentFormat,
+        impressionsCompleted: s.impressionsCompleted ?? impressionsCompleted,
+        mediaSheetsCompleted: s.mediaSheetsCompleted ?? mediaSheetsCompleted,
       );
 
   @override

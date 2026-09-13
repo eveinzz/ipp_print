@@ -7,6 +7,7 @@ import 'ipp_values.dart';
 export 'ipp_values.dart';
 
 part 'ipp_message_builder.dart';
+part 'ipp_message_parser.dart';
 
 /// IPP 1.1（RFC 8011/RFC 8010）报文编解码。
 ///
@@ -312,7 +313,7 @@ class IppCodec {
   /// (boolean)、which-jobs (keyword)、requested-attributes (1setOf keyword)）。
   ///
   /// [requestedAttributes] 传 null（默认）用内置集
-  /// [defaultJobAttributeSet]——**不可省略该属性**：§4.2.6.1 规定省略时
+  /// [_defaultJobAttributeSet]——**不可省略该属性**：§4.2.6.1 规定省略时
   /// Printer **MUST** 按「客户端只给了 job-uri 与 job-id」响应，于是合规
   /// 打印机回的就是「只有 job-id 的最小作业组」，缺 job-state 会被
   /// [IppClient.getJobs] 的契约防御整组跳过 ⇒ 恒返回空集。参考实现
@@ -332,76 +333,40 @@ class IppCodec {
       ..attr(tagName, 'requesting-user-name', userName)
       ..attr(tagBoolean, 'my-jobs', myJobs)
       ..attr(tagKeyword, 'which-jobs', whichJobs);
-    for (final name in requestedAttributes ?? defaultJobAttributeSet) {
+    for (final name in requestedAttributes ?? _defaultJobAttributeSet) {
       b.attrOrValue(tagKeyword, 'requested-attributes', name);
     }
     return b.take();
   }
 
-  /// 作业查询的内置属性集（0.7.6 起 Get-Jobs 默认发送）。
+  /// 作业查询的内置属性集（0.7.6 起 Get-Jobs 默认发送；**内核私有**——
+  /// 请求集属实现细节，宿主经 `requestedAttributes` 自定义即可，
+  /// CORE FREEZE 下补丁版本不得新增公共面）。
   ///
   /// 覆盖 [IppJobSummary] 全部契约字段所需的作业状态属性；0.8.0 起追加
   /// §5.3.18 的两个进度计数器。刻意**不含** `job-uri`——重复信息，
   /// 且 `IppJobSummary` 无对应字段（用 job-id 寻址，RFC 8011 §4.3.4.1）。
-  static const List<String> defaultJobAttributeSet = [
+  ///
+  /// 计数器（`job-impressions-completed` / `job-media-sheets-completed`，
+  /// 0.8.0 起纳入）：前者与 `job-impressions` 同被 PWG 5100.14 v1.1
+  /// **Table 11「IPP Everywhere™ Required Job Status Attributes」列为
+  /// Required**——免驱认证机型必回；后者仅 RFC 8011 §5.3.18.3
+  /// RECOMMENDED（Table 11 不含它，勿过度声明）。非认证机不回时经宽容
+  /// 解码如实为 null，绝不推断。参考实现 CUPS `backend/ipp.c`
+  /// `jattrs[]` 同样显式请求这两个计数器。
+  static const List<String> _defaultJobAttributeSet = [
     'job-id',
     'job-state',
     'job-state-reasons',
     'job-name',
     'job-originating-user-name',
+    'job-impressions-completed',
+    'job-media-sheets-completed',
   ];
 
   /// 解析 IPP 响应（status 成功区间 0x0000–0x00FF）。
-  static IppResponse parseResponse(Uint8List data) {
-    if (data.length < 8) {
-      throw const IppPrintException('IPP response too short');
-    }
-    final bd = ByteData.sublistView(data);
-    final statusCode = bd.getUint16(2, Endian.big);
-    final requestId = bd.getUint32(4, Endian.big);
-    var i = 8;
-    var group = IppGroup(tagOperationGroup);
-    final groups = <IppGroup>[group];
-    String? lastName;
-    void require(int needed) {
-      if (i + needed > data.length) {
-        throw const IppPrintException('truncated IPP response');
-      }
-    }
-
-    while (i < data.length) {
-      final tag = data[i++];
-      if (tag == tagEndOfAttributes) break;
-      if (tag <= 0x0F) {
-        group = IppGroup(tag);
-        groups.add(group);
-        lastName = null;
-        continue;
-      }
-      require(2);
-      final nameLen = bd.getUint16(i, Endian.big);
-      i += 2;
-      require(nameLen);
-      final name = nameLen == 0
-          ? lastName
-          : utf8.decode(data.sublist(i, i + nameLen), allowMalformed: true);
-      i += nameLen;
-      require(2);
-      final valueLen = bd.getUint16(i, Endian.big);
-      i += 2;
-      require(valueLen);
-      final raw = Uint8List.sublistView(data, i, i + valueLen);
-      i += valueLen;
-      if (name == null) {
-        throw const IppPrintException('IPP attribute value without name');
-      }
-      lastName = name;
-      group.add(name, IppValue(tag, raw));
-    }
-    return IppResponse(
-      statusCode: statusCode,
-      requestId: requestId,
-      groups: groups,
-    );
-  }
+  ///
+  /// 实现体在 [ipp_message_parser.dart]（行数治理：单文件 ≤400 行），
+  /// 此处保留一行委托——公共签名与行为零变更。
+  static IppResponse parseResponse(Uint8List data) => _parseIppResponse(data);
 }

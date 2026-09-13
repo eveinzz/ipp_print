@@ -486,6 +486,44 @@ job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收�
   inspect / validateJob 已有 6 点）本轮**未扩容**——它们的日志点已覆盖各自的主要
   分叉。
 
+### 0.7.6 — Get-Jobs Default Request Set & Out-of-Band Decoding（已交付，2026-09-13）
+
+- ✅ **修复 `getJobs()` 在 §4.2.6.1 合规打印机上恒返回空集**：`buildGetJobs()`
+  原在 `requestedAttributes == null` 时**省略**该属性，而 §4.2.6.1 规定省略时
+  Printer **MUST** 按「客户端只给了 `job-uri` 与 `job-id`」响应 ⇒ 回组缺
+  `job-state`，被契约防御整组跳过。真机实证（EPSON L3250，插件自身路径）：
+  `LIVE-DEFAULT -> 0 jobs` / `LIVE-EXPLICIT -> 2 jobs`。
+  **归因勘误**：曾误判为「打印机违反规范」——真实原因是同一份 RFC 两节缺省
+  语义相反（`Get-Jobs` §4.2.6.1 = `job-uri`+`job-id`；`Get-Job-Attributes`
+  §4.3.4.1 = `all`），本包注释曾把后者当共同表述，已更正。
+  修法 = 缺省发送内置属性集（内核私有常量；CUPS `backend/ipp.c` `jattrs[]`
+  同姿势）。公共 API 签名零变更（null 语义从「省略」变为「内置集」）。
+- ✅ **out-of-band 宽容解码**：`IppValue.asIntOrNull` 对 `no-value`（0x13）、
+  `unknown`（0x12）、`unsupported`（0x10）等零长度 out-of-band 值
+  （RFC 8010 §3.5.2 Table 3）返回 null 而非抛；`asInt` 保持严格语义。
+  响应解析路径（`_intOf`/`_enumOf`/`_intsOf`/job-id/job-state）全部切换。
+- ✅ 锚点 6 例；敏感性验证双向各精确转红（请求集还原 → 2 红；严格解码还原 → 4 红）。
+
+### 0.8.0 — Job Progress Counters（页计数透传，已交付，2026-09-13）
+
+- ✅ **`IppJobSummary` / `PrintJob` 新增 `impressionsCompleted` /
+  `mediaSheetsCompleted`**（RFC 8011 §5.3.18.2 / §5.3.18.3）：`getJob` /
+  `getJobs` / `monitor`（经 `withSummary`）全程透传；Get-Jobs 内置请求集
+  （内核私有常量）同步补两个计数器。**只透传原始计数、绝不合成「页」**——impression 是
+  media sheet 的一面（§2.3.4），份数/双面/N-up 下不等于本地页数；换算与
+  分母（共几页）属宿主职责。缺省 / `no-value` 如实 null。
+  规范依据（逐条核对原文）：PWG 5100.14 v1.1 **Table 11** 将
+  `job-impressions-completed`（连同 `job-impressions`）列为 IPP Everywhere
+  Required Job Status Attributes（免驱认证机型必回）；
+  `job-media-sheets-completed` 仅 RFC 8011 §5.3.18.3 RECOMMENDED，
+  **Table 11 不含它**（初版文档曾误写「两者均 Required」，审计轮已勘误）。
+- ✅ 宿主侧使用姿势（zitie 分子=X 已可得；分母 Y 用本地 pageCount）：
+  显示「已打印 X」或「X / Y」；计数停增 + `job-state-reasons` 可定位卡页。
+- ⚠️ 未证项（诚实清单）：①「计数在 processing 中实时递增」仅规范/CUPS 佐证，
+  真机只观测到终态值（授权打印 3 页文档一次实验可锁死）；②L3250 保留作业
+  2 impressions 的成因（份数 vs 页块数）未区分；③仅 1 台非认证入门机型样本，
+  双面机 `media-sheets` 行为未验证。
+
 ### 0.8.x+ — 候选增强（封板后，additive-only）
 
 - [ ] `IppValue` 补齐 IPP 值语法：`dateTime`（0x31，RFC 8011 §5.1.15）、

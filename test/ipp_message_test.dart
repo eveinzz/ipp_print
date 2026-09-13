@@ -240,18 +240,20 @@ void main() {
     expect('requested-attributes'.allMatches(text).length, 1,
         reason: '同名多值应只出现一次（后续值走零长度名，RFC 8010 §3.1.5）');
 
-    for (final name in IppCodec.defaultJobAttributeSet) {
-      expect(text.contains(name), isTrue, reason: '内置集缺属性 $name');
-    }
-    // 契约字段的充分性：IppJobSummary 的 4 个可解析字段都在请求集内。
-    for (final required in const [
+    // 契约清单**硬编码于测试**（不读实现常量——锚点不循环）：缺省请求集
+    // 必须覆盖 IppJobSummary 全部可解析字段；0.8.0 起含两个页计数器
+    // （RFC 8011 §5.3.18.2 / §5.3.18.3）。
+    const contract = [
       'job-id',
       'job-state',
       'job-state-reasons',
       'job-name',
       'job-originating-user-name',
-    ]) {
-      expect(IppCodec.defaultJobAttributeSet, contains(required));
+      'job-impressions-completed',
+      'job-media-sheets-completed',
+    ];
+    for (final name in contract) {
+      expect(text.contains(name), isTrue, reason: '缺省请求集缺属性 $name');
     }
   });
 

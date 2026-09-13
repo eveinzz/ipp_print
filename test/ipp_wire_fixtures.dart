@@ -166,6 +166,33 @@ Uint8List jobSnapshot({int state = 3, List<String> reasons = const []}) {
   return resp(0, 0x02, attrs);
 }
 
+/// Get-Job-Attributes 应答：页计数器形态（0.8.0 锚点 fixture）。
+///
+/// `job-impressions-completed` 回实值 7；`job-media-sheets-completed` 回
+/// **no-value**（tag 0x13，零长度值）——L3250 真机实测形态（该机不声明
+/// `job-impressions-supported`，PWG 5100.14 Table 11 的 Required 项在
+/// 非认证机上可缺），解析必须宽容为 null 而非抛。
+final jobSnapshotCounters = resp(0, 0x02, [
+  ...intAttr('job-id', 42),
+  ...intAttr('job-state', 5), // processing
+  ...intAttr('job-impressions-completed', 7),
+  // no-value：tag 0x13 + 名 + 零长度值（RFC 8010 §3.5.2 Table 3）
+  ...noValueAttr('job-media-sheets-completed'),
+]);
+
+/// no-value 值属性（out-of-band，RFC 8010 §3.5.2；值恒零长度）。
+List<int> noValueAttr(String name) {
+  final nb = name.codeUnits;
+  return [
+    0x13,
+    (nb.length >> 8) & 0xFF,
+    nb.length & 0xFF,
+    ...nb,
+    0x00,
+    0x00,
+  ];
+}
+
 /// 返回属性 [name] 所在属性组的组 tag（找不到返回 -1）。
 /// 独立线格式步进器，用于锚定 RFC 8011 §4.2.1.1 的组归属。
 int groupOf(List<int> body, String name) {

@@ -146,7 +146,9 @@ const _internalOnly = <String>{
   'lib/src/ipp/ipp_client_inspect.dart',
   'lib/src/ipp/ipp_client_validate.dart',
   'lib/src/ipp/ipp_client_wire_log.dart',
+  'lib/src/ipp/ipp_job_models.dart',
   'lib/src/ipp/ipp_message_builder.dart',
+  'lib/src/ipp/ipp_message_parser.dart',
   // 实现细节：CapabilityValidator 仅经 Facade 出口可达（0.5 契约定位）。
   'lib/src/capability/capability_validator.dart',
   // 调试日志：内核内部诊断通道，非宿主 API。
