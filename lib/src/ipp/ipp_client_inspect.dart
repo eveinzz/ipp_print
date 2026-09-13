@@ -139,20 +139,24 @@ List<String> _keywords(IppGroup? g, String name) => [
       for (final v in g?.attributes[name] ?? const <IppValue>[]) v.asString,
     ];
 
-List<int> _intsOf(IppGroup? g, String name) => [
-      for (final v in g?.attributes[name] ?? const <IppValue>[]) v.asInt,
-    ];
+/// 多值 integer/enum：out-of-band 项被**跳过**而非抛异常（RFC 8011
+/// §5.1.1：`no-value`/`unknown` 是合法形态，不代表属性值损坏）。
+List<int> _intsOf(IppGroup? g, String name) =>
+    (g?.attributes[name] ?? const <IppValue>[])
+        .map((v) => v.asIntOrNull)
+        .whereType<int>()
+        .toList(growable: false);
 
 int? _enumOf(IppGroup? g, String name) {
   final values = g?.attributes[name];
   if (values == null || values.isEmpty) return null;
-  return values.first.asInt;
+  return values.first.asIntOrNull;
 }
 
 int? _intOf(IppGroup? g, String name) {
   final values = g?.attributes[name];
   if (values == null || values.isEmpty) return null;
-  return values.first.asInt;
+  return values.first.asIntOrNull;
 }
 
 String? _stringOf(IppGroup? g, String name) {

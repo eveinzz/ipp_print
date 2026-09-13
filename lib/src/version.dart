@@ -14,4 +14,4 @@
 library;
 
 /// 当前包版本，必须与 `pubspec.yaml` 的 `version:` 严格一致。
-const String ippPrintVersion = '0.7.5';
+const String ippPrintVersion = '0.7.6';

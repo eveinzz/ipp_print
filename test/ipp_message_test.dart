@@ -224,6 +224,37 @@ void main() {
     expect(actual, r.out.toBytes());
   });
 
+  test('Get-Jobs 缺省请求显式携带内置 requested-attributes（缺省语义防御）', () {
+    final actual = IppCodec.buildGetJobs(
+      printerUri: 'ipp://p.local:631/ipp/print',
+      requestId: 4,
+    );
+    final text = String.fromCharCodes(actual);
+
+    // 必须显式发出：RFC 8011 §4.2.6.1 的缺省是「Printer MUST 按客户端只给了
+    // job-uri 与 job-id 响应」，而「缺省 = all」是 §4.3.4.1
+    // （Get-Job-Attributes）——两节相反且极易串（本包注释曾写错，0.7.6 修）。
+    // 省略该属性 ⇒ 合规打印机回的作业组缺 job-state ⇒ getJobs() 恒空。
+    expect(text.contains('requested-attributes'), isTrue,
+        reason: '缺省省略 requested-attributes 是已实证的真实缺陷');
+    expect('requested-attributes'.allMatches(text).length, 1,
+        reason: '同名多值应只出现一次（后续值走零长度名，RFC 8010 §3.1.5）');
+
+    for (final name in IppCodec.defaultJobAttributeSet) {
+      expect(text.contains(name), isTrue, reason: '内置集缺属性 $name');
+    }
+    // 契约字段的充分性：IppJobSummary 的 4 个可解析字段都在请求集内。
+    for (final required in const [
+      'job-id',
+      'job-state',
+      'job-state-reasons',
+      'job-name',
+      'job-originating-user-name',
+    ]) {
+      expect(IppCodec.defaultJobAttributeSet, contains(required));
+    }
+  });
+
   test('Validate-Job 请求金标：操作码 0x0004、无文档数据、与 Print-Job 同构', () {
     const options = PrintOptions(
       media: 'iso_a4_210x297mm',

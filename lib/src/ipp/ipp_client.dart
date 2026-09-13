@@ -151,7 +151,7 @@ class IppClient {
       ..add(document);
     final res = await post(p.httpUri, body.toBytes());
     _ensureSuccess(res, 'Print-Job');
-    final jobId = res.firstValue('job-id')?.asInt;
+    final jobId = res.firstValue('job-id')?.asIntOrNull;
     if (jobId == null) {
       throw const IppPrintException('Print-Job response missing job-id');
     }
@@ -183,7 +183,7 @@ class IppClient {
       ),
     );
     _ensureSuccess(res, 'Create-Job');
-    final jobId = res.firstValue('job-id')?.asInt;
+    final jobId = res.firstValue('job-id')?.asIntOrNull;
     if (jobId == null) {
       throw const IppPrintException('Create-Job response missing job-id');
     }
@@ -256,7 +256,7 @@ class IppClient {
 
   /// 响应中 job-state 的 lenient 解码（缺 → unknown，绝不猜 pending）。
   static IppJobState _stateOf(IppResponse res) {
-    final code = res.firstValue('job-state')?.asInt;
+    final code = res.firstValue('job-state')?.asIntOrNull;
     return code == null ? IppJobState.unknown : IppJobState.fromCode(code);
   }
 
@@ -277,7 +277,7 @@ class IppClient {
       ),
     );
     _ensureSuccess(res, 'Get-Job-Attributes');
-    final code = res.firstValue('job-state')?.asInt;
+    final code = res.firstValue('job-state')?.asIntOrNull;
     // 缺失/未知 job-state 如实 unknown（0.4.1：不再猜 pending）。
     return code == null ? IppJobState.unknown : IppJobState.fromCode(code);
   }
@@ -300,7 +300,13 @@ class IppClient {
   ///
   /// [whichJobs]：'not-completed'（默认，活动队列）或 'completed'。
   /// [myJobs]：true 时只返回 requesting-user-name 对应用户的作业。
-  /// [requestedAttributes]：请求的作业属性集；null 则省略（默认 all）。
+  /// [requestedAttributes]：请求的作业属性集；null（默认）用
+  /// [IppCodec.defaultJobAttributeSet]。
+  ///
+  /// ⚠️ 该属性**不可省略**：§4.2.6.1 的缺省语义是「Printer MUST 按客户端
+  /// 只给了 `job-uri` 与 `job-id` 响应」——与 Get-Job-Attributes 的
+  /// §4.3.4.1「缺省 = all」**恰好相反**（两节易串）。省略时合规打印机回的
+  /// 作业组没有 job-state，会被下方契约防御整组跳过 ⇒ **恒返回空集**。
   Future<List<IppJobSummary>> getJobs(
     DiscoveredPrinter p, {
     bool myJobs = false,
@@ -320,6 +326,8 @@ class IppClient {
     _ensureSuccess(res, 'Get-Jobs');
     // 脏组防御：缺 job-id / job-state 的组不满足 IppJobSummary 契约，
     // 静默补 0/pending 会掩盖解析异常——跳过并记录（TODO 0.3 项）。
+    // 0.7.6 起该分支不再由「本包漏发 requested-attributes」触发：正常
+    // 打印机（含 §4.2.6.1 合规机）在显式请求下必回 job-state。
     final summaries = <IppJobSummary>[];
     for (final g in res.groups.where((g) => g.tag == IppCodec.tagJobGroup)) {
       final jobId = _intOf(g, 'job-id');

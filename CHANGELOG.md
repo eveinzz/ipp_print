@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.6] — 2026-09-13
+
+### Fixed
+
+- **`getJobs()` 在合规打印机上恒返回空集**（真机实证，非推测）。
+  `buildGetJobs()` 在调用方未传 `requestedAttributes` 时**省略**该属性，
+  而 RFC 8011 **§4.2.6.1** 对这一省略的规定是「Printer **MUST** respond as if
+  the Client had supplied this attribute with **two values: "job-uri" and
+  "job-id"**」—— 于是合规打印机回的作业组**没有 `job-state`**，被
+  `IppClient.getJobs` 的契约防御（要求 `job-id` **且** `job-state`）**整组跳过**。
+  **取证**（EPSON L3250，走插件自身代码路径）：
+  `LIVE-DEFAULT -> 0 jobs` / `LIVE-EXPLICIT -> 2 jobs`，日志
+  `skip dirty group (… keys=[job-id, job-uri])`。
+  ⚠️ 该缺陷曾被误判为「打印机违反规范」——真实原因是**同一份 RFC 里两节缺省
+  语义相反**：`Get-Jobs` 缺省 = `job-uri` + `job-id`（**§4.2.6.1**），
+  `Get-Job-Attributes` 缺省 = **all**（**§4.3.4.1**）。本包源码注释曾把后者
+  当作共同表述（「null 则省略（默认 all）」），已一并更正。
+  修法：缺省改发内置集 `IppCodec.defaultJobAttributeSet`（覆盖 `IppJobSummary`
+  全部契约字段），与参考实现 CUPS `backend/ipp.c` 的 `jattrs[]` 显式列全同姿势。
+  **公共 API 零变更**：`requestedAttributes` 参数本身不变，仅「null = 省略」
+  改为「null = 内置集」（与同库 `buildGetPrinterAttributes` 既有语义一致）。
+
+- **`IppValue` 对 out-of-band 值抛异常，会打崩轮询**。`asInt` 对非 4 字节值抛
+  `IppPrintException`，但 out-of-band 值（RFC 8010 **§3.5.2 Table 3**：
+  `unsupported` 0x10 / `unknown` 0x12 / `no-value` 0x13，**零字节值**）是
+  **合法形态**而非坏报文——RFC 8011 **§5.1.1** 为 `unknown` 举的例子正是
+  `sheet count`，**§5.3.14** 系列更规定未发生的时刻 MUST 回 `no-value`；
+  真机实测 L3250 的 `job-impressions` 即回 `no-value`。新增宽容解码
+  `IppValue.asIntOrNull`（out-of-band 或非 4 字节 → null）与 `isOutOfBand`，
+  **响应解析路径一律改用它**（`_intOf` / `_enumOf` / `_intsOf` / `job-id` /
+  `job-state`）；`asInt` 保持严格语义不变（形态错误仍抛）。null 与「属性缺失」
+  同义，符合「缺 ≠ 支持，绝不推断」纪律。
+
+### Added
+
+- **锚点（4 例）**：Get-Jobs 缺省请求显式含 `requested-attributes`
+  （报文层金标 + 真实 HTTP 路径请求体断言）；out-of-band 三 tag
+  `asIntOrNull → null`；`no-value` 的 `job-state` 使 `getJob` 返回 `unknown`
+  而非抛出。**敏感性验证**：请求集还原为「省略」→ 报文层与客户端层两例转红。
+
 ## [0.7.5] — 2026-09-13
 
 ### Added

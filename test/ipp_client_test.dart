@@ -345,6 +345,12 @@ void main() {
     // 请求应携带 Get-Jobs 操作码（0x000A）
     expect(server.requests.single[2] << 8 | server.requests.single[3],
         IppCodec.opGetJobs);
+    // 且必须显式携带 requested-attributes（0.7.6 修复的正是它的缺席：
+    // RFC 8011 §4.2.6.1 的缺省只回 job-uri + job-id，会让下方契约防御
+    // 整组跳过 ⇒ 合规打印机上 getJobs() 恒空）。
+    final req = String.fromCharCodes(server.requests.single);
+    expect(req.contains('requested-attributes'), isTrue);
+    expect(req.contains('job-state'), isTrue);
   });
 
   test('getJobs：缺 job-id/job-state 的脏组被跳过（不再静默 0/pending）', () async {
@@ -371,6 +377,25 @@ void main() {
     final jobs = await client.getJobs(printer);
     expect(jobs, hasLength(2));
     expect(jobs.map((j) => j.jobId), [42, 43]);
+  });
+
+  test('getJob：job-state 为 no-value（RFC 8011 §5.1.1）→ unknown，不抛', () async {
+    // 合法 out-of-band 形态，不是坏报文（RFC 8010 §3.5.2 Table 3：0x13）。
+    // 严格 asInt 会在此抛异常并打崩每 2s 一次的 monitor 轮询。
+    final b = BytesBuilder()
+      ..add([0x01, 0x01, 0x00, 0x00, 0, 0, 0, 8])
+      ..addByte(0x01)
+      ..add(_attr(0x47, 'attributes-charset', _s('utf-8')))
+      ..add(_attr(0x48, 'attributes-natural-language', _s('en')))
+      ..addByte(0x02)
+      ..add(_attr(0x21, 'job-id', _i32(42)))
+      ..add(_attr(0x13, 'job-state', const <int>[])) // no-value，零字节
+      ..addByte(0x03);
+    server.enqueueIpp(b.toBytes());
+
+    final job = await client.getJob(printer, 42);
+    expect(job.jobId, 42);
+    expect(job.jobState, IppJobState.unknown);
   });
 
   test('getPrinterCapabilities：全量能力解析（resolution/range/boolean/enum）',

@@ -310,6 +310,13 @@ class IppCodec {
 
   /// Get-Jobs（RFC 8011 §4.2.6 / IPP Guide Appendix A：可选 my-jobs
   /// (boolean)、which-jobs (keyword)、requested-attributes (1setOf keyword)）。
+  ///
+  /// [requestedAttributes] 传 null（默认）用内置集
+  /// [defaultJobAttributeSet]——**不可省略该属性**：§4.2.6.1 规定省略时
+  /// Printer **MUST** 按「客户端只给了 job-uri 与 job-id」响应，于是合规
+  /// 打印机回的就是「只有 job-id 的最小作业组」，缺 job-state 会被
+  /// [IppClient.getJobs] 的契约防御整组跳过 ⇒ 恒返回空集。参考实现
+  /// CUPS `backend/ipp.c` 的 `jattrs[]` 同样是显式列全，而非依赖缺省。
   static Uint8List buildGetJobs({
     required String printerUri,
     required int requestId,
@@ -325,13 +332,24 @@ class IppCodec {
       ..attr(tagName, 'requesting-user-name', userName)
       ..attr(tagBoolean, 'my-jobs', myJobs)
       ..attr(tagKeyword, 'which-jobs', whichJobs);
-    if (requestedAttributes != null) {
-      for (final name in requestedAttributes) {
-        b.attrOrValue(tagKeyword, 'requested-attributes', name);
-      }
+    for (final name in requestedAttributes ?? defaultJobAttributeSet) {
+      b.attrOrValue(tagKeyword, 'requested-attributes', name);
     }
     return b.take();
   }
+
+  /// 作业查询的内置属性集（0.7.6 起 Get-Jobs 默认发送）。
+  ///
+  /// 覆盖 [IppJobSummary] 全部契约字段所需的作业状态属性；0.8.0 起追加
+  /// §5.3.18 的两个进度计数器。刻意**不含** `job-uri`——重复信息，
+  /// 且 `IppJobSummary` 无对应字段（用 job-id 寻址，RFC 8011 §4.3.4.1）。
+  static const List<String> defaultJobAttributeSet = [
+    'job-id',
+    'job-state',
+    'job-state-reasons',
+    'job-name',
+    'job-originating-user-name',
+  ];
 
   /// 解析 IPP 响应（status 成功区间 0x0000–0x00FF）。
   static IppResponse parseResponse(Uint8List data) {

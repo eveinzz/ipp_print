@@ -66,11 +66,22 @@ class IppGroup {
 class IppValue {
   const IppValue(this.tag, this.raw);
 
+  /// out-of-band value-tag（RFC 8010 **§3.5.2 Table 3**）：`unsupported`
+  /// 0x10 / `unknown` 0x12 / `no-value` 0x13。三者线形态都是**零字节值**，
+  /// 即「此处没有可用的语法值」，不是任何具体语法。
+  static const int tagUnsupported = 0x10;
+  static const int tagUnknown = 0x12;
+  static const int tagNoValue = 0x13;
+
   /// value-tag（0x21 integer / 0x23 enum / 0x44 keyword / 0x47 charset …）。
   final int tag;
 
   /// 原始值字节（大端；integer/enum 恒 4 字节）。
   final Uint8List raw;
+
+  /// 是否为 out-of-band 值（RFC 8011 §5.1.1）。
+  bool get isOutOfBand =>
+      tag == tagUnsupported || tag == tagUnknown || tag == tagNoValue;
 
   /// 文本类值（keyword/uri/charset/name/mime 等）解码。
   ///
@@ -85,6 +96,19 @@ class IppValue {
       throw IppPrintException('integer/enum value must be 4 bytes, '
           'got ${raw.length}');
     }
+    return ByteData.sublistView(raw).getInt32(0, Endian.big);
+  }
+
+  /// integer/enum 值的**宽容**解码：out-of-band 或非 4 字节 → null。
+  ///
+  /// 与 [asInt]（严格：形态不符即抛）的分工——**响应解析一律用本方法**。
+  /// 打印机对「支持但当前取不到值」的整数属性回 out-of-band 是**合法
+  /// 形态**，不是坏报文：RFC 8011 **§5.1.1** 为 `unknown` 举的例子正是
+  /// `sheet count`，**§5.3.14** 系列更规定未发生的时刻 MUST 回 `no-value`。
+  /// 把合法形态当异常抛会让整条轮询（[IppClient.getJob] 每 2s 一次）崩掉；
+  /// 返回 null 与「属性缺失」同义，符合「缺 ≠ 支持，绝不推断」纪律。
+  int? get asIntOrNull {
+    if (isOutOfBand || raw.length != 4) return null;
     return ByteData.sublistView(raw).getInt32(0, Endian.big);
   }
 
