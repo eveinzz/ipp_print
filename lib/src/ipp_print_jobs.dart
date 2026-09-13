@@ -81,29 +81,68 @@ Stream<Object> _prepareSubmission(
     }
     final enc = dpi == null ? encoder : PwgRasterEncoder(dpi: dpi);
     yield const PrintProgress(PrintStage.rasterizing);
-    final pwg = BytesBuilder(copy: false);
-    // PWG 5102.4 Figure 1：同步字为文件级，整个文档只出现一次。
-    pwg.add(enc.syncWordBytes);
+    // 逐页编码并留存页块（不直接拼接）：份数需在**文档层**重复整份页序，
+    // 见下方「份数在文档层实现」。
+    final pages = <Uint8List>[];
     var pageNo = 0;
     await for (final page
         in rasterizer.rasterize(document.bytes, dpi: dpi ?? defaultDpi)) {
       pageNo++;
-      pwg.add(enc.encodePage(page));
+      pages.add(enc.encodePage(page));
       yield PrintProgress(PrintStage.encoding, page: pageNo);
     }
     if (pageNo == 0) {
       throw const IppPrintException('rasterizer produced no pages');
     }
+    // ── 份数在**文档层**实现（0.7.4 缺陷修复，通用判据与机型无关）────
+    // 判据一（参考实现）：CUPS 对流式光栅 `image/*` 与
+    //   `application/vnd.cups-raster` **强制 `copies = 1`**，原文注释
+    //   "Multi-page image formats will have copies applied by the upstream
+    //   filters"（cups/ppd-cache.c `_cupsConvertOptions`）—— 即「份数由上游
+    //   预产」是参考实现的既定架构，而非某机型的怪癖。
+    // 判据二（语义）：RFC 8011 §5.2.5 中单文档 `copies=N` 意为 N 份**完整副本**
+    //   （collated Sets，§2.3.10），非「逐页 N 次」。故客户端预产必须整份
+    //   重复页序；重复单页会得到 uncollated（错序）结果。
+    // 判据三（合规底线）：PWG 5100.14 *IPP Everywhere* Table 8 把 `copies`
+    //   列为 **REQUIRED** Job Template 属性，§9.3 要求支持 image/jpeg 或
+    //   application/pdf/openxps 的打印机必须支持之。声明支持却静默忽略属不
+    //   合规，客户端兜底是这类后端上唯一仍然正确的做法。
+    // 佐证（真机实测，仅作佐证、不构成判据）：EPSON L3250（2026-09-12）
+    //   自报 `copies-supported: 1..99` 且把 copies 列入
+    //   job-creation-attributes-supported，实操却对 copies≥2 一律回
+    //   successful-ok-ignored-or-substituted(0x0001，Unsupported Attributes
+    //   组列出 copies），impressions=1；其 PPD 亦声明
+    //   `*cupsManualCopies: True`（CUPS PPD 扩展：printer does not support
+    //   copy generation in hardware）。该现象与判据一/二预测完全一致。
+    // 故：整份页序重复 copies 次（**collated**），下发的 `copies` 恒为 1。
+    // 恒为 1 是为避免重复计数：打印机若真支持硬件份数，1 份 × 已含 N 份的
+    // 文档 = N 份，两种实现下语义自洽。
+    // copies < 1 视作 1（RFC 8011 §5.2.5 copies 下界为 1；否则会产出只有
+    // 同步字的空文档）。
+    final copies = options.copies < 1 ? 1 : options.copies;
+    final pwg = BytesBuilder(copy: false);
+    // PWG 5102.4 Figure 1：同步字为文件级，整个文档只出现一次。
+    pwg.add(enc.syncWordBytes);
+    for (var c = 0; c < copies; c++) {
+      for (final p in pages) {
+        pwg.add(p);
+      }
+    }
     yield _PreparedSubmission(
       bytes: pwg.takeBytes(),
       documentFormat: decision.documentFormat,
-      options: options,
+      options: _withCopies(options, 1),
       jobName: document.name ?? 'ipp_print-document',
       pageCount: pageNo,
     );
     return;
   }
   // 直投：文档字节原样提交（保矢量与文本层）。
+  // `copies` 原样下发（**与栅格路径刻意不对称**）：直投的是打印机自身
+  // 声明的格式（如 application/pdf），其 RIP 按 RFC 8011 §5.2.5 处理份数，
+  // 且客户端无从在 PDF 内预产副本；CUPS 对 `application/pdf` 同样不下压
+  // copies（其 `copies = 1` 分支只覆盖 image/* 与 CUPS raster）。该路径的
+  // 份数依赖打印机实现，属已知边界（见 README 诚实清单）。
   yield _PreparedSubmission(
     bytes: Uint8List.fromList(document.bytes),
     documentFormat: decision.documentFormat,
@@ -111,6 +150,18 @@ Stream<Object> _prepareSubmission(
     jobName: document.name ?? 'ipp_print-document',
   );
 }
+
+/// 复制 [o] 并把 `copies` 替换为 [copies]（不改原对象）。用于栅格路径把
+/// 已在文档层实现的份数从下发属性中归一为 1。
+PrintOptions _withCopies(PrintOptions o, int copies) => PrintOptions(
+      copies: copies,
+      media: o.media,
+      colorMode: o.colorMode,
+      duplex: o.duplex,
+      fidelity: o.fidelity,
+      resolution: o.resolution,
+      printQuality: o.printQuality,
+    );
 
 /// 提交作业并等待终态（print() 的公共尾部）。
 /// [pageCount] 仅栅格回退路径已知；直投路径如实为 null。

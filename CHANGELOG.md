@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.4] — 2026-09-12
+
+### Fixed
+
+- **栅格路径静默吞掉打印份数（设 N 份只出 1 份）**。此前 `copies` 无论何值
+  都原样下发；对流式光栅文档（`image/pwg-raster` 回退路径），后端**可以**回
+  `successful-ok-ignored-or-substituted-attributes`（`0x0001`）并只印一份 ——
+  而 `0x0001` 落在本包的成功区间内，于是宿主看到成功、用户只拿到 1 份，全程
+  无告警。现栅格路径把份数实现在**文档层**：整份页序重复 `copies` 次
+  （**collated**），下发属性固定为 `copies=1`（避免与硬件份数重复计数；
+  `copies < 1` 归一为 1，绝不产出只含同步字的空文档）。
+
+  判据（**通用，与机型/品牌/型号无关**，均为一手核对）：
+
+  - **参考实现**：CUPS 对流式光栅 `image/*` 与 `application/vnd.cups-raster`
+    **强制 `copies = 1`**，由上游过滤器预产副本（`cups/ppd-cache.c`
+    `_cupsConvertOptions`，注释原文 "Multi-page image formats will have copies
+    applied by the upstream filters"）。即「客户端预产份数」是参考实现的既定
+    架构，不是某个驱动的怪癖。
+  - **协议语义**：RFC 8011 §5.2.5 中单文档 `copies=N` 意为 N 份**完整副本**
+    （collated Sets，§2.3.10），而非「逐页 N 次」；故客户端预产必须整份重复
+    页序 —— 重复单页会得到 uncollated（错序）结果。
+  - **合规底线**：PWG 5100.14 *IPP Everywhere* Table 8 将 `copies` 列为
+    **REQUIRED** Job Template 属性，§9.3 要求支持 image/jpeg 或
+    application/pdf/openxps 的打印机必须支持之。声明支持却静默忽略属不合规，
+    客户端兜底是这类后端上唯一仍然正确的做法。
+  - **真机佐证（仅佐证，不构成判据）**：EPSON L3250（2026-09-12）自报
+    `copies-supported: 1..99` 且把 `copies` 列入
+    `job-creation-attributes-supported`，实操对 `copies≥2` 的 Print-Job 与
+    Validate-Job **一律**回 `0x0001`（Unsupported Attributes 组列出 `copies`），
+    作业计数 `impressions=1`；其 PPD 亦声明 `*cupsManualCopies: True`
+    （CUPS PPD 扩展：printer does not support copy generation in hardware）。
+    现象与上述三条判据完全一致。
+
+### Added
+
+- `test/copies_test.dart`：份数端到端锚点 5 例 —— `copies=2` → 页序重复 2 次
+  且属性 `copies=1`；`copies=1` → 与修复前逐字节一致；`copies=0`/负值 →
+  归一为 1；默认 ticket → 单份；PDF 直投 `copies=2` → 属性原样为 2。
+  属性值由**独立线格式步进器**读取（不依赖被测解析代码）。敏感性验证：
+  还原旧实现 → 其中 2 例转红。全量 **187 例**通过（原 182 + 5）。
+
+### Changed
+
+- 栅格路径下发的 `copies` 属性**语义变更**：由「原样传递用户值」改为
+  「恒为 1，份数已体现在文档字节中」。对宿主 API 无影响（`PrintTicket` /
+  `PrintOptions` 入参不变），但**抓包可见**属性值变化 —— 这是修复本身的要求。
+
 ## [0.7.3] — 2026-09-12
 
 发现层**资源路径策略单源化**：两条发现通道（`multicast_dns` / 原生 Bonjour）

@@ -182,7 +182,7 @@ if (!job.isTerminal) {
 
 | 字段 | 默认值 | 对应 IPP 作业属性 | 说明 |
 |---|---|---|---|
-| `copies` | `1` | `copies` | 份数（恒下发；份数无「打印机默认」语义） |
+| `copies` | `1` | `copies` | 份数（恒下发；份数无「打印机默认」语义）。**栅格回退**路径把份数实现在**文档层** —— 整份页序重复 `copies` 次（collated），属性固定为 `1`；**直投**路径原样下发。详见边界清单第 8 条。 |
 | `media` | `null` | `media` | PWG 介质名；应取自打印机 `media-supported`（`null` = 不下发，用 `media-default`） |
 | `sides`（ticket）/ `duplex`（options） | `null` | `sides` | `one-sided` / `two-sided-long-edge` / `two-sided-short-edge`；取值应为 `sides-supported` 的成员（`null` = 不下发，用 `sides-default`） |
 | `colorMode` | `null` | `print-color-mode` | `null` = 不下发 → 打印机用 `print-color-mode-default`（典型为 `auto`）。显式指定（`color` / `monochrome` 等）则原样下发，取值应为打印机 `print-color-mode-supported` 的成员（全集见 PWG 5107.3 §6.2.27）。 |
@@ -270,6 +270,8 @@ HP 官方 [jipp](https://github.com/HPInc/jipp) 与 istopwg 指南
 5. **不接管 AirPrint 机型** —— 分类为 `airPrint` 的设备交还系统打印面板。
 6. **绝不凭猜造资源路径** —— 广播 IPP 但 `rp` TXT 值不可用（缺失或为空）的服务，在**两条通道上都被跳过**；此类打印机请用 `addEndpoint` 显式添加。此前两者相反：原生 Bonjour 路径兜底 `/ipp/print`，而 `multicast_dns` 路径丢弃实例——同一台打印机会**在 iOS/macOS 可见、在 Android/Linux/Windows 不可见**。`rp` 在 Bonjour 打印中可省略，但在 IPP Everywhere（PWG 5100.14）中是 **MUST**，故受影响设备必然非合规，其真实路径我们无从得知——猜一个只会让设备先出现、再在打印时失败。TXT 键按大小写不敏感匹配（RFC 6763 §6.2）。
 7. **两条发现通道的超时语义不同** —— 原生浏览器由单一硬 deadline 约束；`MDnsPrinterDiscovery` 逐实例串行解析，最坏耗时约为 `10 秒 × 实例数`，而非请求的 timeout。
+
+8. **份数：栅格路径由客户端实产、直投路径交给打印机** —— 流式光栅文档（`image/pwg-raster`）不能指望打印机自行复制：CUPS 对流式光栅同样**强制 `copies = 1`**，由上游过滤器预产副本（`cups/ppd-cache.c` `_cupsConvertOptions`）；部分打印机自报 `copies-supported` 却回 `successful-ok-ignored-or-substituted-attributes`（`0x0001`）并只印一份 —— 该状态本包视为成功，故缺口原本是**静默**的。现栅格路径把**整份页序**重复 `copies` 次（collated，依 RFC 8011 §5.2.5 / §2.3.10 的 Set 语义）并下发 `copies=1`。直投路径（如 `application/pdf`）客户端无从在负载内预产副本，故 `copies` 原样下发，最终取决于打印机 RIP。另需注意：对支持 jpeg/pdf 的打印机，`copies` 在 IPP Everywhere（PWG 5100.14 Table 8、§9.3）中是 **REQUIRED** 作业属性 —— 收下却静默忽略即属不合规。
 
 ## FAQ
 

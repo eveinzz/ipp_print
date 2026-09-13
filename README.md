@@ -173,7 +173,7 @@ guess one.
 
 | Field | Default | IPP job attribute | Notes |
 |---|---|---|---|
-| `copies` | `1` | `copies` | integer (always sent; there is no "printer default" for copies) |
+| `copies` | `1` | `copies` | integer (always sent; there is no "printer default" for copies). On the **raster fallback** path the copies are realised **in the document** — the whole page sequence is repeated `copies` times, collated — and the attribute is pinned to `1`; on the **direct-send** path the value is passed through unchanged. See Limitation 8. |
 | `media` | `null` | `media` | PWG name; should come from the printer's `media-supported` (`null` = omitted → `media-default`) |
 | `sides` (ticket) / `duplex` (options) | `null` | `sides` | `one-sided` / `two-sided-long-edge` / `two-sided-short-edge`; should be a member of `sides-supported` (`null` = omitted → `sides-default`) |
 | `colorMode` | `null` | `print-color-mode` | `null` = attribute omitted → the printer applies its own `print-color-mode-default` per RFC 8011 (typically `auto`). Explicit values (`color` / `monochrome`, …) are sent as-is and should be a member of the printer's `print-color-mode-supported` (full value set: PWG 5107.3 §6.2.27). |
@@ -264,6 +264,8 @@ serve as capability checklists.
 5. **AirPrint-class printers are not intercepted** — devices classified as `airPrint` are handed to the OS print panel.
 6. **A resource path is never invented** — a service that broadcasts IPP without a usable `rp` TXT value (absent or empty) is skipped on **both** transports; add such a printer explicitly with `addEndpoint`. This replaced a divergence: the native Bonjour path used to fall back to `/ipp/print` while the `multicast_dns` path dropped the instance, so the same printer could appear on iOS/macOS and be missing on Android/Linux/Windows. `rp` is optional in Bonjour printing but mandatory for IPP Everywhere (PWG 5100.14), so the affected devices are non-conforming and their real path is unknowable to us — a guess would surface a printer that then fails at print time. TXT keys are matched case-insensitively (RFC 6763 §6.2).
 7. **Discovery timeout semantics differ between transports** — the native browser is bounded by one hard deadline, while `MDnsPrinterDiscovery` resolves instances serially, so its worst case is roughly `10 s × number of instances` rather than the requested timeout.
+
+8. **Copies are produced by the client on the raster path, and left to the printer on the direct-send path** — a streaming raster document (`image/pwg-raster`) cannot rely on the printer to duplicate it: CUPS itself forces `copies = 1` for `image/*` and `application/vnd.cups-raster` and lets the upstream filter pre-produce the copies (`cups/ppd-cache.c` `_cupsConvertOptions`), and some printers advertise `copies-supported` yet answer `successful-ok-ignored-or-substituted-attributes` (`0x0001`) and print a single copy — a status this package treats as success, so the shortfall would otherwise be silent. The raster path therefore repeats the **whole page sequence** `copies` times (collated, per RFC 8011 §5.2.5 / §2.3.10 Set semantics) and sends `copies=1`. On the direct-send path (e.g. `application/pdf`) the client cannot pre-produce copies inside the payload, so `copies` is passed through and the outcome depends on the printer's RIP. Note that `copies` is a **REQUIRED** Job Template attribute in IPP Everywhere (PWG 5100.14 Table 8, §9.3) for jpeg/pdf-capable printers, so a printer that accepts the value and silently ignores it is non-conforming.
 
 ## FAQ
 

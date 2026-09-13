@@ -250,6 +250,65 @@ job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收�
   注释 ×3）；UA 版本串漂移复发（0.6 → 0.7）。
   （端口出处原记为 §4.1 属错引，0.7.2 按一手原文更正为 §5。）
 
+### 0.7.4 — Copies Semantics on the Raster Path（已交付，2026-09-12）
+
+准入依据：CORE FREEZE 允许的「修 BUG / 协议正确性 / 测试 / 文档」。触发：
+宿主反馈「`PrintTicket(copies: 2)` 实际只印 1 份」—— 全链审计确认为真实缺陷。
+
+**缺陷**：`copies` 无论何值都原样下发。对流式光栅文档，后端**可以**回
+`successful-ok-ignored-or-substituted-attributes`（`0x0001`）并只印一份；而
+`0x0001` 落在 `isSuccessful`（`statusCode <= 0x00FF`）区间内 → 宿主收到成功、
+用户只得到 1 份，**全程无告警**。
+
+**修复**：栅格路径把份数实现在**文档层** —— 整份页序重复 `copies` 次
+（collated），下发属性固定 `copies=1`（防与硬件份数重复计数）；`copies < 1`
+归一为 1（RFC 8011 §5.2.5 下界为 1，否则会产出只含同步字的空文档）。
+
+判据（**通用，与机型/品牌/型号无关**，均为一手核对）：
+1. **参考实现**：CUPS 对流式光栅 `image/*` 与 `application/vnd.cups-raster`
+   **强制 `copies = 1`**，由上游过滤器预产副本（`cups/ppd-cache.c`
+   `_cupsConvertOptions`，注释原文 "Multi-page image formats will have copies
+   applied by the upstream filters"）⇒「客户端预产份数」是参考实现的既定架构，
+   不是某个驱动的怪癖。
+2. **协议语义**：RFC 8011 §5.2.5 中单文档 `copies=N` 意为 N 份**完整副本**
+   （collated Sets，§2.3.10）⇒ 预产必须整份重复页序；重复单页会得到
+   uncollated（错序）结果。
+3. **合规底线**：PWG 5100.14 *IPP Everywhere* Table 8 将 `copies` 列为
+   **REQUIRED** Job Template 属性，§9.3 要求支持 image/jpeg 或
+   application/pdf/openxps 的打印机必须支持之 ⇒ 收下却静默忽略属不合规，
+   客户端兜底是这类后端上唯一仍然正确的做法。
+4. **真机佐证（仅佐证，不构成判据）**：EPSON L3250（2026-09-12）自报
+   `copies-supported: 1..99` 且把 copies 列入 `job-creation-attributes-supported`，
+   实操对 `copies≥2` 的 Print-Job 与 Validate-Job **一律**回 `0x0001`
+   （Unsupported Attributes 组列出 copies），`impressions=1`；其 PPD 声明
+   `*cupsManualCopies: True`。现象与判据 1–3 预测一致。
+
+- [x] `_prepareSubmission` 栅格分支改为「先逐页收页块 → 整份页序重复 copies 次
+  → 同步字仍只在文档开头出现一次」；新增 `_withCopies` 归一下发属性。
+- [x] 锚点 `test/copies_test.dart` 5 例（属性值由**独立线格式步进器**读取，
+  不依赖被测解析代码）；**敏感性验证**：还原旧实现 → 2 例转红。全量
+  **187 例**绿（原 182 + 5），analyze 零告警，`dart format` 零差异。
+- [x] 双 README：Job options `copies` 行改写 + 诚实清单第 8 条新增。
+- [x] 版本 0.7.3 → 0.7.4（pubspec / 双 podspec / `version.dart` 四处一致，
+  由既有版本链闸保证）。
+
+**本轮显式不做（理由留档）**：
+
+- **直投路径不下压份数**：客户端无从在 PDF 负载内预产副本，`copies` 交打印机
+  RIP 按 RFC 8011 §5.2.5 处理（CUPS 的 `copies=1` 分支同样只覆盖 image/* 与
+  CUPS raster）。**两条路径刻意不对称**，已登记入 README 诚实清单第 8 条。
+- **`0x0001` 仍视为成功**：属 0.7.0 封板的 `isSuccessful` 契约（`0x0000`–
+  `0x00FF` 均为成功类）。改为失败会破坏「打印机忽略某属性但仍正常出纸」的
+  合法语义（RFC 8011 §5.2 明确允许 Printer 以 `0x0001` 响应替换属性）。
+  本缺陷的根因是份数可被**静默**忽略，已在文档层根治。若宿主需感知「哪些属性
+  被忽略」，应经 `0x0001` 响应的 Unsupported Attributes 组**告警**而非报错 ——
+  列 0.8.x+ 候选，本包不改封板契约。
+- **真机侧诚实边界**：出纸实证期间打印机缺纸
+  （`printer-alert=inputMediaSupplyEmpty` → 后续提交 `0x0507 server-error-busy`），
+  判别性实验（1 页 + `copies=1` → 应为 1 张）**未能执行**。测试作业已由本包
+  经 Cancel-Job（op `0x0008`）取消（job 60 → `job-canceled-by-user`），队列
+  已清空。修复正确性由**规范判据 + 线格式锚点**支撑，**不声称出纸验证**。
+
 ### 0.7.3 — Discovery Resource-Path Policy（已交付，2026-09-12）
 
 准入依据：CORE FREEZE 允许的「正确性 / 测试 / 文档」。触发：0.7.2 遗留的
