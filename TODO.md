@@ -250,6 +250,151 @@ job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收�
   注释 ×3）；UA 版本串漂移复发（0.6 → 0.7）。
   （端口出处原记为 §4.1 属错引，0.7.2 按一手原文更正为 §5。）
 
+### 0.7.2 — Documentation & Version Truthfulness（已交付，2026-09-12）
+
+准入依据：CORE FREEZE 允许的「正确性 / 测试 / 文档」——无公共 API 增删。
+触发：0.7.1 全链审计（P0=0；问题全部落在**对外文档失真 / 版本链无单一
+真相源 / 引用错引**三类治理缺口，而非协议实现）。
+
+- [x] 双 README 边界清单 2 条**与实现相反**（「不支持 PDF 直投」「分辨率协商
+  尚未实现」）→ 改为与实现一致；补 2 条此前未披露的诚实条目（两条发现通道的
+  `rp` 策略 / 超时语义不对称）。
+- [x] 「Pure Dart, zero Flutter dependencies」半真声明 → 精确化（协议内核纯
+  Dart；包整体是 Flutter 插件，Facade 级测试需 `flutter test`）。
+- [x] RFC 错引更正：端口 631 出处 `RFC 8010 §4.1` → **§5**（一手核验，见下
+  「引用纪律」）；并回改 0.7.0 / 0.7.1 条目内的同一错引。
+- [x] 版本单一真相源：`lib/src/version.dart` + UA 派生 + `0.5.0` podspec →
+  `0.7.2`；闸 = `test/version_consistency_test.dart` + CI version-consistency。
+- [x] 公共导出面锚点 `test/public_api_test.dart`（43 类型编译期断言 + 导出闭包
+  静态闸 + `inspect()` 解析/超时映射 + `validateTicket()` 出口）。
+- [x] `monitor()` 超时硬上界修复（deadline 提至循环首）+ 瞬态路径锚点。
+- [x] `dart format` 全量收敛 + CI 格式门。
+- [x] 文档注释失真 2 处（`IppValue.values()` 跨组语义、PWG 同步字写入点）。
+- [x] `example/main.dart` 注入 `FakeDiscovery`（原为定义未注入，运行即抛
+  `StateError`，与注释/README 的「离线可跑」承诺相反）。
+
+**本轮显式不做（记录理由，防遗忘；均需拍板或各自锚点）**：
+
+- `rp` 缺失策略两路径对齐（Apple 路径「猜 `/ipp/print`」→ 与 mDNS 一致的
+  丢弃）：**属用户可见行为变更**（iOS 可见打印机集合会变），与「安全优先」
+  冲突，需显式拍板；现状已写入双 README 诚实清单第 6 条。
+  （**0.7.3 已拍板并交付**：统一为「跳过」，理由见下方 0.7.3 段。）
+- `DocumentEncoder` 真接入（需 `encode()` 接口细化）：属 0.8.x additive 提案
+  （见下），不在补丁版动接口。
+- mDNS 全局 deadline（收敛最坏耗时 `10s × N`）：本轮仅文档披露（第 7 条）。
+- 直投零拷贝（`bytes is Uint8List` 直接透出）与 426 TLS 升级记忆化：纯性能项，
+  各自需锚点，留待下轮。
+- PWG 5102.4 金标向量出处归档缺口（审计 P2-9）：`test/pwg_encoder_test.dart`
+  引用 §4.4.1 样例向量与 §4.4.2 Figure 3 的 87-octet 样本，但**未归档取自哪
+  一版规范**；本次离线取不到 PWG 5102.4 原文，故金标数值本身未对一手文本复核
+  （编码逻辑经逐字节演算 + CUPS `raster.h` 常量核对判定正确）。**待办**：网络
+  可达时补一次一手核对，回填「规范版本 + 日期 + 页/图号」。
+
+### 0.7.3 — Discovery Resource-Path Policy（已交付，2026-09-12）
+
+准入依据：CORE FREEZE 允许的「正确性 / 测试 / 文档」。触发：0.7.2 遗留的
+待拍板项 —— 两条发现通道对「TXT `rp` 缺失」的处理相反。
+
+**决策（决策权委派，0.7.3）**：统一为「`rp` 缺失/为空 ⇒ 跳过实例，**绝不造
+路径**」（审计报告第 7 节所述 A 语义），而非「两条路径都兜底 `/ipp/print`」。
+
+判据（三条，均可复核）：
+1. `resourcePath` 是「该打印机在此路径可用」的**断言**。`rp` 缺失时填一个具体
+   路径，是把「未知」写成「已知」——与 0.7.2 收口的「能力虚报」同类，只是从
+   文档层挪到了代码层。
+2. `/ipp/print` **缺乏对「省略 rp 子集」的规范支撑**：Apple WWDC 2016 S725
+   的「多数 AirPrint 打印机路径为 ipp/print」说的是打印机整体；CUPS 参考实现
+   从不据 `rp` 推导路径（5 个源文件零命中）；macOS 把路径解析推迟到连接期。
+3. **代价可逆**：库有 `addEndpoint` 显式入口（手动端点即用户断言），「不猜」
+   不等于永久失去该设备。
+
+- [x] 策略单源 `lib/src/discovery/resource_path.dart`（内核内部，不进 barrel），
+  两条通道共用 —— 消除本项目头号缺陷源（同契约双实现漂移）在本轴上的再现。
+- [x] 原生路径撤掉 `/ipp/print` 兜底；TXT 键归一小写（RFC 6763 §6.2 +
+  `DiscoveredPrinter.txt` 的「小写键」契约，后者此前在原生路径可被违反）。
+- [x] 跨路径契约锚点 `test/discovery_rp_policy_test.dart`（同一条线路 TXT 同时
+  驱动两条路径，逐格断言一致）+ 原生路径 4 例；**敏感性验证**：旧行为下
+  6 例转红。
+- [x] 双 README 诚实清单第 6 条改写；版本 0.7.2 → 0.7.3（pubspec / 双 podspec /
+  `version.dart` 四处一致，由既有闸保证）。
+- [x] 审计报告第 7 节追加决策记录。
+
+**本轮显式不做（理由留档）**：
+
+- 0.7.2 的其余「显式不做」项（`DocumentEncoder` 真接入 / mDNS 全局 deadline /
+  直投零拷贝 / 426 TLS 记忆化 / PWG 5102.4 金标出处归档）**状态不变**。
+- `rp` 值为纯空白（如 `" "`）仍会产出 `'/ '` 这类路径：未观测到的边角；加
+  `trim()` 属**未经验证的行为选择**，按「不加未验证行为」纪律不动。
+- **真机侧诚实边界**：本机局域网只有 EPSON L3250（TXT 含 `rp`），「省略 `rp`」
+  分支**无真机可验**；该分支行为由规范原文 + 合成锚点支撑，**不声称真机验证**。
+
+### 0.7.4 — Copies Semantics on the Raster Path（已交付，2026-09-12）
+
+准入依据：CORE FREEZE 允许的「修 BUG / 协议正确性 / 测试 / 文档」。触发：
+宿主反馈「`PrintTicket(copies: 2)` 实际只印 1 份」—— 全链审计确认为真实缺陷。
+
+**缺陷**：`copies` 无论何值都原样下发。对流式光栅文档，后端**可以**回
+`successful-ok-ignored-or-substituted-attributes`（`0x0001`）并只印一份；而
+`0x0001` 落在 `isSuccessful`（`statusCode <= 0x00FF`）区间内 → 宿主收到成功、
+用户只得到 1 份，**全程无告警**。
+
+**修复**：栅格路径把份数实现在**文档层** —— 整份页序重复 `copies` 次
+（collated），下发属性固定 `copies=1`（防与硬件份数重复计数）；`copies < 1`
+归一为 1（RFC 8011 §5.2.5 下界为 1，否则会产出只含同步字的空文档）。
+
+判据（**通用，与机型/品牌/型号无关**，均为一手核对）：
+1. **参考实现**：CUPS 对流式光栅 `image/*` 与 `application/vnd.cups-raster`
+   **强制 `copies = 1`**，由上游过滤器预产副本（`cups/ppd-cache.c`
+   `_cupsConvertOptions`，注释原文 "Multi-page image formats will have copies
+   applied by the upstream filters"）⇒「客户端预产份数」是参考实现的既定架构，
+   不是某个驱动的怪癖。
+2. **协议语义**：RFC 8011 §5.2.5 中单文档 `copies=N` 意为 N 份**完整副本**
+   （collated Sets，§2.3.10）⇒ 预产必须整份重复页序；重复单页会得到
+   uncollated（错序）结果。
+3. **合规底线**：PWG 5100.14 *IPP Everywhere* Table 8 将 `copies` 列为
+   **REQUIRED** Job Template 属性，§9.3 要求支持 image/jpeg 或
+   application/pdf/openxps 的打印机必须支持之 ⇒ 收下却静默忽略属不合规，
+   客户端兜底是这类后端上唯一仍然正确的做法。
+4. **真机佐证（仅佐证，不构成判据）**：EPSON L3250（2026-09-12）自报
+   `copies-supported: 1..99` 且把 copies 列入 `job-creation-attributes-supported`，
+   实操对 `copies≥2` 的 Print-Job 与 Validate-Job **一律**回 `0x0001`
+   （Unsupported Attributes 组列出 copies），`impressions=1`；其 PPD 声明
+   `*cupsManualCopies: True`。现象与判据 1–3 预测一致。
+
+- [x] `_prepareSubmission` 栅格分支改为「先逐页收页块 → 整份页序重复 copies 次
+  → 同步字仍只在文档开头出现一次」；新增 `_withCopies` 归一下发属性。
+- [x] 锚点 `test/copies_test.dart` 5 例（属性值由**独立线格式步进器**读取，
+  不依赖被测解析代码）；**敏感性验证**：还原旧实现 → 2 例转红。全量
+  **187 例**绿（原 182 + 5），analyze 零告警，`dart format` 零差异。
+- [x] **字段完整性锚点（2026-09-13 补，消费方审计轮）**：`_withCopies` **手工罗列
+  `PrintOptions` 全部字段**（模型无 `copyWith`）⇒ 模型新增字段而此处漏抄即
+  **静默丢弃** —— 与 `0x0001` 静默忽略同族，且正属本项目头号缺陷类（声明层 vs
+  实现层脱节）。新增 1 例，覆盖**栅格与直投两条路径**的 6 个非份数属性
+  （`media` / `print-color-mode` / `sides` / `printer-resolution` /
+  `ipp-attribute-fidelity` / `print-quality`）。**敏感性验证**：移除
+  `printQuality` → **`+5 -1`**，仅该例转红。**纯测试新增，不改变发布产物，
+  故不提升版本号**（版本链四处仍为 0.7.5）；全量 **194 例**绿。
+- [x] 双 README：Job options `copies` 行改写 + 诚实清单第 8 条新增。
+- [x] 版本 0.7.3 → 0.7.4（pubspec / 双 podspec / `version.dart` 四处一致，
+  由既有版本链闸保证）。
+
+**本轮显式不做（理由留档）**：
+
+- **直投路径不下压份数**：客户端无从在 PDF 负载内预产副本，`copies` 交打印机
+  RIP 按 RFC 8011 §5.2.5 处理（CUPS 的 `copies=1` 分支同样只覆盖 image/* 与
+  CUPS raster）。**两条路径刻意不对称**，已登记入 README 诚实清单第 8 条。
+- **`0x0001` 仍视为成功**：属 0.7.0 封板的 `isSuccessful` 契约（`0x0000`–
+  `0x00FF` 均为成功类）。改为失败会破坏「打印机忽略某属性但仍正常出纸」的
+  合法语义（RFC 8011 §5.2 明确允许 Printer 以 `0x0001` 响应替换属性）。
+  本缺陷的根因是份数可被**静默**忽略，已在文档层根治。若宿主需感知「哪些属性
+  被忽略」，应经 `0x0001` 响应的 Unsupported Attributes 组**告警**而非报错 ——
+  列 0.8.x+ 候选，本包不改封板契约。
+- **真机侧诚实边界**：出纸实证期间打印机缺纸
+  （`printer-alert=inputMediaSupplyEmpty` → 后续提交 `0x0507 server-error-busy`），
+  判别性实验（1 页 + `copies=1` → 应为 1 张）**未能执行**。测试作业已由本包
+  经 Cancel-Job（op `0x0008`）取消（job 60 → `job-canceled-by-user`），队列
+  已清空。修复正确性由**规范判据 + 线格式锚点**支撑，**不声称出纸验证**。
+
 ### 0.7.5 — Kernel Diagnostics Coverage（已交付，2026-09-13）
 
 准入依据：CORE FREEZE 允许的「测试 / 正确性」——**公共 API 零变更、零新增依赖**，
@@ -341,151 +486,6 @@ job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收�
   inspect / validateJob 已有 6 点）本轮**未扩容**——它们的日志点已覆盖各自的主要
   分叉。
 
-### 0.7.4 — Copies Semantics on the Raster Path（已交付，2026-09-12）
-
-准入依据：CORE FREEZE 允许的「修 BUG / 协议正确性 / 测试 / 文档」。触发：
-宿主反馈「`PrintTicket(copies: 2)` 实际只印 1 份」—— 全链审计确认为真实缺陷。
-
-**缺陷**：`copies` 无论何值都原样下发。对流式光栅文档，后端**可以**回
-`successful-ok-ignored-or-substituted-attributes`（`0x0001`）并只印一份；而
-`0x0001` 落在 `isSuccessful`（`statusCode <= 0x00FF`）区间内 → 宿主收到成功、
-用户只得到 1 份，**全程无告警**。
-
-**修复**：栅格路径把份数实现在**文档层** —— 整份页序重复 `copies` 次
-（collated），下发属性固定 `copies=1`（防与硬件份数重复计数）；`copies < 1`
-归一为 1（RFC 8011 §5.2.5 下界为 1，否则会产出只含同步字的空文档）。
-
-判据（**通用，与机型/品牌/型号无关**，均为一手核对）：
-1. **参考实现**：CUPS 对流式光栅 `image/*` 与 `application/vnd.cups-raster`
-   **强制 `copies = 1`**，由上游过滤器预产副本（`cups/ppd-cache.c`
-   `_cupsConvertOptions`，注释原文 "Multi-page image formats will have copies
-   applied by the upstream filters"）⇒「客户端预产份数」是参考实现的既定架构，
-   不是某个驱动的怪癖。
-2. **协议语义**：RFC 8011 §5.2.5 中单文档 `copies=N` 意为 N 份**完整副本**
-   （collated Sets，§2.3.10）⇒ 预产必须整份重复页序；重复单页会得到
-   uncollated（错序）结果。
-3. **合规底线**：PWG 5100.14 *IPP Everywhere* Table 8 将 `copies` 列为
-   **REQUIRED** Job Template 属性，§9.3 要求支持 image/jpeg 或
-   application/pdf/openxps 的打印机必须支持之 ⇒ 收下却静默忽略属不合规，
-   客户端兜底是这类后端上唯一仍然正确的做法。
-4. **真机佐证（仅佐证，不构成判据）**：EPSON L3250（2026-09-12）自报
-   `copies-supported: 1..99` 且把 copies 列入 `job-creation-attributes-supported`，
-   实操对 `copies≥2` 的 Print-Job 与 Validate-Job **一律**回 `0x0001`
-   （Unsupported Attributes 组列出 copies），`impressions=1`；其 PPD 声明
-   `*cupsManualCopies: True`。现象与判据 1–3 预测一致。
-
-- [x] `_prepareSubmission` 栅格分支改为「先逐页收页块 → 整份页序重复 copies 次
-  → 同步字仍只在文档开头出现一次」；新增 `_withCopies` 归一下发属性。
-- [x] 锚点 `test/copies_test.dart` 5 例（属性值由**独立线格式步进器**读取，
-  不依赖被测解析代码）；**敏感性验证**：还原旧实现 → 2 例转红。全量
-  **187 例**绿（原 182 + 5），analyze 零告警，`dart format` 零差异。
-- [x] **字段完整性锚点（2026-09-13 补，消费方审计轮）**：`_withCopies` **手工罗列
-  `PrintOptions` 全部字段**（模型无 `copyWith`）⇒ 模型新增字段而此处漏抄即
-  **静默丢弃** —— 与 `0x0001` 静默忽略同族，且正属本项目头号缺陷类（声明层 vs
-  实现层脱节）。新增 1 例，覆盖**栅格与直投两条路径**的 6 个非份数属性
-  （`media` / `print-color-mode` / `sides` / `printer-resolution` /
-  `ipp-attribute-fidelity` / `print-quality`）。**敏感性验证**：移除
-  `printQuality` → **`+5 -1`**，仅该例转红。**纯测试新增，不改变发布产物，
-  故不提升版本号**（版本链四处仍为 0.7.5）；全量 **194 例**绿。
-- [x] 双 README：Job options `copies` 行改写 + 诚实清单第 8 条新增。
-- [x] 版本 0.7.3 → 0.7.4（pubspec / 双 podspec / `version.dart` 四处一致，
-  由既有版本链闸保证）。
-
-**本轮显式不做（理由留档）**：
-
-- **直投路径不下压份数**：客户端无从在 PDF 负载内预产副本，`copies` 交打印机
-  RIP 按 RFC 8011 §5.2.5 处理（CUPS 的 `copies=1` 分支同样只覆盖 image/* 与
-  CUPS raster）。**两条路径刻意不对称**，已登记入 README 诚实清单第 8 条。
-- **`0x0001` 仍视为成功**：属 0.7.0 封板的 `isSuccessful` 契约（`0x0000`–
-  `0x00FF` 均为成功类）。改为失败会破坏「打印机忽略某属性但仍正常出纸」的
-  合法语义（RFC 8011 §5.2 明确允许 Printer 以 `0x0001` 响应替换属性）。
-  本缺陷的根因是份数可被**静默**忽略，已在文档层根治。若宿主需感知「哪些属性
-  被忽略」，应经 `0x0001` 响应的 Unsupported Attributes 组**告警**而非报错 ——
-  列 0.8.x+ 候选，本包不改封板契约。
-- **真机侧诚实边界**：出纸实证期间打印机缺纸
-  （`printer-alert=inputMediaSupplyEmpty` → 后续提交 `0x0507 server-error-busy`），
-  判别性实验（1 页 + `copies=1` → 应为 1 张）**未能执行**。测试作业已由本包
-  经 Cancel-Job（op `0x0008`）取消（job 60 → `job-canceled-by-user`），队列
-  已清空。修复正确性由**规范判据 + 线格式锚点**支撑，**不声称出纸验证**。
-
-### 0.7.3 — Discovery Resource-Path Policy（已交付，2026-09-12）
-
-准入依据：CORE FREEZE 允许的「正确性 / 测试 / 文档」。触发：0.7.2 遗留的
-待拍板项 —— 两条发现通道对「TXT `rp` 缺失」的处理相反。
-
-**决策（决策权委派，0.7.3）**：统一为「`rp` 缺失/为空 ⇒ 跳过实例，**绝不造
-路径**」（审计报告第 7 节所述 A 语义），而非「两条路径都兜底 `/ipp/print`」。
-
-判据（三条，均可复核）：
-1. `resourcePath` 是「该打印机在此路径可用」的**断言**。`rp` 缺失时填一个具体
-   路径，是把「未知」写成「已知」——与 0.7.2 收口的「能力虚报」同类，只是从
-   文档层挪到了代码层。
-2. `/ipp/print` **缺乏对「省略 rp 子集」的规范支撑**：Apple WWDC 2016 S725
-   的「多数 AirPrint 打印机路径为 ipp/print」说的是打印机整体；CUPS 参考实现
-   从不据 `rp` 推导路径（5 个源文件零命中）；macOS 把路径解析推迟到连接期。
-3. **代价可逆**：库有 `addEndpoint` 显式入口（手动端点即用户断言），「不猜」
-   不等于永久失去该设备。
-
-- [x] 策略单源 `lib/src/discovery/resource_path.dart`（内核内部，不进 barrel），
-  两条通道共用 —— 消除本项目头号缺陷源（同契约双实现漂移）在本轴上的再现。
-- [x] 原生路径撤掉 `/ipp/print` 兜底；TXT 键归一小写（RFC 6763 §6.2 +
-  `DiscoveredPrinter.txt` 的「小写键」契约，后者此前在原生路径可被违反）。
-- [x] 跨路径契约锚点 `test/discovery_rp_policy_test.dart`（同一条线路 TXT 同时
-  驱动两条路径，逐格断言一致）+ 原生路径 4 例；**敏感性验证**：旧行为下
-  6 例转红。
-- [x] 双 README 诚实清单第 6 条改写；版本 0.7.2 → 0.7.3（pubspec / 双 podspec /
-  `version.dart` 四处一致，由既有闸保证）。
-- [x] 审计报告第 7 节追加决策记录。
-
-**本轮显式不做（理由留档）**：
-
-- 0.7.2 的其余「显式不做」项（`DocumentEncoder` 真接入 / mDNS 全局 deadline /
-  直投零拷贝 / 426 TLS 记忆化 / PWG 5102.4 金标出处归档）**状态不变**。
-- `rp` 值为纯空白（如 `" "`）仍会产出 `'/ '` 这类路径：未观测到的边角；加
-  `trim()` 属**未经验证的行为选择**，按「不加未验证行为」纪律不动。
-- **真机侧诚实边界**：本机局域网只有 EPSON L3250（TXT 含 `rp`），「省略 `rp`」
-  分支**无真机可验**；该分支行为由规范原文 + 合成锚点支撑，**不声称真机验证**。
-
-### 0.7.2 — Documentation & Version Truthfulness（已交付，2026-09-12）
-
-准入依据：CORE FREEZE 允许的「正确性 / 测试 / 文档」——无公共 API 增删。
-触发：0.7.1 全链审计（P0=0；问题全部落在**对外文档失真 / 版本链无单一
-真相源 / 引用错引**三类治理缺口，而非协议实现）。
-
-- [x] 双 README 边界清单 2 条**与实现相反**（「不支持 PDF 直投」「分辨率协商
-  尚未实现」）→ 改为与实现一致；补 2 条此前未披露的诚实条目（两条发现通道的
-  `rp` 策略 / 超时语义不对称）。
-- [x] 「Pure Dart, zero Flutter dependencies」半真声明 → 精确化（协议内核纯
-  Dart；包整体是 Flutter 插件，Facade 级测试需 `flutter test`）。
-- [x] RFC 错引更正：端口 631 出处 `RFC 8010 §4.1` → **§5**（一手核验，见下
-  「引用纪律」）；并回改 0.7.0 / 0.7.1 条目内的同一错引。
-- [x] 版本单一真相源：`lib/src/version.dart` + UA 派生 + `0.5.0` podspec →
-  `0.7.2`；闸 = `test/version_consistency_test.dart` + CI version-consistency。
-- [x] 公共导出面锚点 `test/public_api_test.dart`（43 类型编译期断言 + 导出闭包
-  静态闸 + `inspect()` 解析/超时映射 + `validateTicket()` 出口）。
-- [x] `monitor()` 超时硬上界修复（deadline 提至循环首）+ 瞬态路径锚点。
-- [x] `dart format` 全量收敛 + CI 格式门。
-- [x] 文档注释失真 2 处（`IppValue.values()` 跨组语义、PWG 同步字写入点）。
-- [x] `example/main.dart` 注入 `FakeDiscovery`（原为定义未注入，运行即抛
-  `StateError`，与注释/README 的「离线可跑」承诺相反）。
-
-**本轮显式不做（记录理由，防遗忘；均需拍板或各自锚点）**：
-
-- `rp` 缺失策略两路径对齐（Apple 路径「猜 `/ipp/print`」→ 与 mDNS 一致的
-  丢弃）：**属用户可见行为变更**（iOS 可见打印机集合会变），与「安全优先」
-  冲突，需显式拍板；现状已写入双 README 诚实清单第 6 条。
-  （**0.7.3 已拍板并交付**：统一为「跳过」，理由见上方 0.7.3 段。）
-- `DocumentEncoder` 真接入（需 `encode()` 接口细化）：属 0.8.x additive 提案
-  （见下），不在补丁版动接口。
-- mDNS 全局 deadline（收敛最坏耗时 `10s × N`）：本轮仅文档披露（第 7 条）。
-- 直投零拷贝（`bytes is Uint8List` 直接透出）与 426 TLS 升级记忆化：纯性能项，
-  各自需锚点，留待下轮。
-- PWG 5102.4 金标向量出处归档缺口（审计 P2-9）：`test/pwg_encoder_test.dart`
-  引用 §4.4.1 样例向量与 §4.4.2 Figure 3 的 87-octet 样本，但**未归档取自哪
-  一版规范**；本次离线取不到 PWG 5102.4 原文，故金标数值本身未对一手文本复核
-  （编码逻辑经逐字节演算 + CUPS `raster.h` 常量核对判定正确）。**待办**：网络
-  可达时补一次一手核对，回填「规范版本 + 日期 + 页/图号」。
-
 ### 0.8.x+ — 候选增强（封板后，additive-only）
 
 - [ ] `IppValue` 补齐 IPP 值语法：`dateTime`（0x31，RFC 8011 §5.1.15）、
@@ -539,4 +539,9 @@ job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收�
   生效）+ CI job `commit-message-language`，两者调用**同一脚本**，不存在第二份
   判定逻辑（守「同契约双实现漂移」禁令）。判定只拒 CJK 字符范围，历史已用到的
   非 ASCII 标点（如 RFC 引用中的 `§`）不受影响；
+- **文档顺序纪律（0.7.5 修正）**：本文件的版本小节一律**按版本号升序**排列——
+  最新在最下，`0.8.x+` 候选恒居末。依据：0.3.0–0.7.1 段与 `64a390a`
+  （"reorder TODO sections to version order"）确立的既有约定。0.7.3 / 0.7.4 /
+  0.7.5 三轮都把新小节插到了上一节**之上**，使同一文件并存两套相反顺序。
+  新版本小节**追加在 `0.8.x+` 段之前**，不插到已有 `0.7.x` 段顶部；
 - 发布日操作：移除 `publish_to: none` → `dart pub publish`（当前保持禁发防误发布）。
