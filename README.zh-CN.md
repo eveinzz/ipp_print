@@ -2,6 +2,7 @@
 
 [English](README.md) | 简体中文
 
+![Version](https://img.shields.io/github/v/tag/eveinzz/ipp_print?label=version&sort=semver)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 ![Dart SDK](https://img.shields.io/badge/Dart-%5E3.4-0175C2?logo=dart&logoColor=white)
 ![Protocol](https://img.shields.io/badge/protocol-IPP%201.1%20(RFC%208011)-green)
