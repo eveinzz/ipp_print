@@ -2,12 +2,17 @@ import 'package:meta/meta.dart';
 import 'package:multicast_dns/multicast_dns.dart';
 
 import '../capability/capability.dart';
+import '../ipp/ipp_log.dart';
 import '../models.dart';
 
 /// mDNS 打印机发现适配器（发现层唯一有状态/联网组件，保持薄）。
 ///
 /// 同时浏览 `_ipp._tcp` 与 `_ipps._tcp`，按 [DiscoveredPrinter.identity]
 /// 去重。记录组装逻辑全部在 [RecordAssembler]（纯函数，可离线测试）。
+///
+/// 诊断：**跳过必留原因**——「打印机没被发现」在 mDNS 轴上有三条互不相同的
+/// 成因（缺 SRV target / TXT 无可用 rp / 查询异常），不留痕时三者输出完全
+/// 一致，无从归因。异常记录后仍**不抛出**：本层契约是返回空集，不向上抛。
 class MDnsPrinterDiscovery implements PrinterDiscovery {
   MDnsPrinterDiscovery({RecordAssembler? assembler})
       : _assembler = assembler ?? const RecordAssembler();
@@ -40,7 +45,10 @@ class MDnsPrinterDiscovery implements PrinterDiscovery {
         for (final serviceType in serviceTypes)
           _browseType(client, serviceType, timeout),
       ]);
-      return mergeDedup(perType);
+      final merged = mergeDedup(perType);
+      ippLog('mdns browse done: ${merged.length} printer(s) after dedup '
+          '(raw per type: ${perType.map((l) => l.length).toList()})');
+      return merged;
     } finally {
       client.stop();
     }
@@ -64,7 +72,15 @@ class MDnsPrinterDiscovery implements PrinterDiscovery {
         timeout,
         secure: secure,
       );
-      if (printer != null) found.add(printer);
+      if (printer != null) {
+        ippLog('mdns $serviceType: + ${printer.name} ${printer.httpUriString}');
+        found.add(printer);
+      } else {
+        // 跳过原因单源：resource_path.dart 的「无可用 rp ⇒ 跳过，绝不造路径」
+        // 与「缺 SRV target」是仅有的两条拒绝路径，如实并列，不猜是哪条。
+        ippLog('mdns $serviceType: - ${_instanceNameOf(ptr.domainName)} '
+            'skipped (SRV missing, or TXT carries no usable rp)');
+      }
     }
     return found;
   }
@@ -106,7 +122,10 @@ class MDnsPrinterDiscovery implements PrinterDiscovery {
       ),
     );
     final srv = await srvFuture;
-    if (srv == null) return null;
+    if (srv == null) {
+      ippLog('mdns $fullName: no SRV record -> cannot derive host/port');
+      return null;
+    }
     final pair = await Future.wait(<Future<ResourceRecord?>>[
       txtFuture,
       _first<IPAddressResourceRecord>(
@@ -118,6 +137,10 @@ class MDnsPrinterDiscovery implements PrinterDiscovery {
     ]);
     final txt = pair[0] as TxtResourceRecord?;
     final ip = pair[1] as IPAddressResourceRecord?;
+    if (ip == null) {
+      ippLog('mdns $fullName: no IPv4 A record for ${srv.target} '
+          '(IPv6-only network, or the record did not arrive in the window)');
+    }
     return _assembler.assemble(
       InstanceRecords(
         instanceName: _instanceNameOf(fullName),
@@ -131,12 +154,16 @@ class MDnsPrinterDiscovery implements PrinterDiscovery {
   }
 
   /// 取流首条记录；空流/出错一律返回 null（发现层不抛异常）。
+  ///
+  /// 异常在此记录后仍返回 null——否则超时与协议错误在输出上不可区分。
   Future<T?> _first<T extends ResourceRecord>(Stream<T> stream) async {
     try {
       return await stream.first;
     } on StateError {
+      ippLog('mdns lookup: no $T record in the browse window');
       return null;
-    } on Exception {
+    } on Exception catch (e) {
+      ippLog('mdns lookup error ($T): $e');
       return null;
     }
   }

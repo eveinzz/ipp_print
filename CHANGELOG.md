@@ -5,6 +5,95 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.5] — 2026-09-13
+
+### Added
+
+- **内核诊断覆盖率**。此前日志极稀：27 个实现文件仅 5 个有日志点，打印主链
+  几乎全静默、`IppClient.post` 传输层**零日志**、发现层 mDNS 通道**零日志**。
+  后果在 0.7.4 显现：份数缺陷只能用自建裸 IPP 探针客户端才能定位。本轮补点
+  全部位于既有编译期门控之后，**公共 API 零变更、零新增依赖**：
+  - **传输层**（新增 part 文件 `ipp_client_wire_log.dart`）：`post()` 是全部
+    8 个 IPP 算子的唯一咽喉，故成对日志只需一处 —— 算子名由**报文头部**读出
+    （RFC 8010 §3.1.1：version 2 字节 + operation-id 2 字节，**不改公共签名**）、
+    请求与响应字节数、HTTP 与 IPP **两层**状态码（分别标注以免误读）、耗时、
+    端点（宿主可并发探测多台打印机，响应行不带端点便无法归因）；
+    `426 Upgrade Required` 的 TLS 同端口重试留痕。**失败路径同样留响应行**：
+    HTTP 非 200 时先记 `<- HTTP <code> … transport failure` 再抛，故日志里
+    「有请求行、无响应行」只可能意味着请求真的没有返回，不会被「失败不记」混淆。
+  - **被忽略属性告警**：响应含 Unsupported Attributes 组（RFC 8010 §3.5.1
+    Table 2：delimiter tag `0x05`）即**逐个列出属性名**，并注明该状态若落在成功
+    区间则**不另有渠道报告**。这正是 0.7.4 的取证空白——真机回 `0x0001` 并列出
+    `copies` 时宿主侧完全无声（`0x0001` 落在成功区间，连异常都没有）。告警由
+    **组**驱动而非由状态码驱动：RFC 8011 §4.1.7 规定该组可随四个状态码
+    （`0x0001` / `0x0002` / `0x040B` / `0x040E`）出现，客户端据组取证才不丢信息。
+    反向情形另有一条提示：状态码属该四者却**未带组**时（§4.1.7 对该四者为
+    MUST），明示「被忽略的属性名不可知」。
+  - **打印管线**：协商结论（直投 or 栅格回退 + 选定格式）、文档产出摘要
+    （页数 / 字节数 / 份数语义 / 下发 `copies=1`）、直投路径的份数委派说明、
+    `job-id`、终态与 `state-reasons`。
+  - **发现层**（`mdns_discovery.dart`）：此前完全静默，「打印机没被发现」无从
+    归因 —— 缺 SRV、缺可用 `rp`、查询异常三者输出**完全相同**。现按「跳过必留
+    原因」补点，并把此前被 `catch` 完全吞掉的查询异常如实记录（异常**仍不抛出**，
+    发现层契约不变）。
+- **调试日志锚点** `test/logging_test.dart`（6 例）。传输层用**真实本地 HTTP
+  服务器**驱动 —— `FakeQueueClient` 覆写了 `post()`，在它身上传输层日志根本
+  不会执行，用它做锚点等于什么都没锚。**敏感性验证**（两轮实测）：日志缝改为空
+  实现 → **6 例全红**（`+0 -6`）；单独移除失败路径的日志调用 → 仅该例转红
+  （`+5 -1`），其余 5 例仍绿。
+- **提交信息语言闸**：`.githooks/commit-msg`（本地钩子）+ CI job
+  `commit-message-language`，**单一实现两入口**（共用同一脚本，杜绝「同契约
+  双实现漂移」）。起因：仓库历史 43 条提交信息全为英文，0.7.4 的推送混入过
+  一条中文（已改写为 `6aac89e`，树内容不变）。闸只拒 CJK；历史已用到的非 ASCII
+  标点（RFC 引用中的 `§`）不受影响；作用域仅限**提交信息**，代码注释与双语文档
+  不变。**闸失效关闭**：`git rev-list` 求值失败（区间表达式写错、引用不存在）时
+  拒绝放行并报 `cannot resolve range`，不把空结果当作「无提交可查」——否则一处
+  typo 即可让本闸静默失效（实测：畸形区间与不存在引用均转入 exit 1）。
+
+### Changed
+
+- **日志缝不再依赖 Flutter**（`lib/src/ipp/ipp_log.dart`）。门控改为编译期的
+  `assert` 包裹副作用（Dart 的断言参数在非开发模式**不求值**），与 `kDebugMode`
+  在所有标准构建模式下等价（debug 有断言，profile/release 无），release 零输出。
+  这正是 Flutter 官方建议写法（`debugPrint` 文档：「As per convention, calls to
+  [debugPrint] should be within a debug mode check or an assert」）。**不可改用
+  `print` 或 `debugPrint`**：前者会在按日志速率限流的平台上丢消息
+  （`debugPrintThrottled` 注释：「This avoids dropping messages on platforms that
+  rate-limit their logging」），后者 release 下照常输出，且两者都会把协议内核与
+  发现层重新拖回对 Flutter 的传递性依赖——`lib/` 现仅
+  `native_bonjour_discovery.dart`（MethodChannel 正当需要）引用 Flutter。
+  **`assert` 内使用 `print` 不触发 `avoid_print`**（实测 `flutter analyze` 零告警）。
+
+### Fixed
+
+- **引用错误：Unsupported Attributes 组被标为 `RFC 8011 §4.2.3`** —— §4.2.3 是
+  **Validate-Job Operation**；该组的定义在 **§4.1.7「Unsupported Attributes」**
+  （原文：「This group is primarily for the Job Creation operations, but **all
+  operations can return this group**」）。已改正线路日志注释、`ipp_message.dart`
+  的常量注释、`TODO.md` 与本节。逐处复核后，**指 Validate-Job 的引用本即正确**
+  （`ipp_print_core.dart`、`capabilities.dart`、`ipp_client_validate.dart`、
+  `ipp_values.dart`、`ipp_client_test.dart`、双 README 标准对照表、
+  `CHANGELOG` 旧条目），未改。
+- **注释引用错误**：`validateJob` 文档称打印机不支持该操作时返回
+  `client-error-operation-not-supported` —— 该名称在 RFC 8011 Appendix B.1.4 的
+  client error 段中**并不存在**。更正为 `server-error-operation-not-supported`
+  （Appendix B.1.5.2，0x0501），一手文本核对。
+
+### Known limitations
+
+- 日志**无运行期分级**（守 `TODO.md` 原则「DEBUG log 给开发者，DiagnosticReport
+  给产品」），故 release 构建**没有**日志开关；宿主侧现场取证归 0.8.x 的
+  `DiagnosticReport`（未实施）。
+- 轮询期间每 2s 一次的 `Get-Job-Attributes` 会**逐次**成对输出：诊断「作业卡住」
+  时必须看得见，代价是长等待下日志量线性增长。
+- `message` 在**调用点**求值，release 下字符串构造**不保证**被编译器消除
+  （插值可能触发 `toString`，无法证明无副作用）。量级**未做基准测量**，故不
+  声称「零开销」。
+- 发现层新日志**无锚点**：`MDnsClient` 无可注入点，不为测试改动公共构造签名。
+- `ippProbeLog` 仍是 `ippLog` 的纯别名（`ipp_print_core.dart`，0.5 起已导出，
+  属公共面，CORE FREEZE 下不可移除）。新代码一律用 `ippLog`；两者共享同一实现，
+  不存在行为漂移。命名统一留待 0.8.x。
+
 ## [0.7.4] — 2026-09-12
 
 ### Fixed

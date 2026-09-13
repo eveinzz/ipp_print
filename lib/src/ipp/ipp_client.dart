@@ -8,6 +8,7 @@ import 'ipp_message.dart';
 
 part 'ipp_client_inspect.dart';
 part 'ipp_client_validate.dart';
+part 'ipp_client_wire_log.dart';
 
 /// job-state 枚举（RFC 8011 §5.3.7 / IPP Guide：3 pending、4 pending-held、
 /// 5 processing、6 processing-stopped、7 canceled、8 aborted、9 completed）。
@@ -85,22 +86,28 @@ class IppClient {
   int get _nextRequestId => _requestId = (_requestId + 1) & 0x7FFFFFFF;
 
   Future<IppResponse> post(Uri httpEndpoint, Uint8List ippBody) async {
+    final started = DateTime.now();
+    _logWireRequest(httpEndpoint, ippBody);
     var (status, body) = await _postOnce(httpEndpoint, ippBody);
     if (status == HttpStatus.upgradeRequired && httpEndpoint.scheme == 'http') {
       // TLS-only 打印机（如 EPSON L3250）：明文端点回 426 Upgrade Required，
       // 要求升级 TLS。按 RFC 2817 精神换 https 同端口重试一次
       // （打印机证书普遍自签，已由 acceptSelfSignedTls 放行）。
+      ippLog('426 Upgrade Required -> retrying over TLS on the same port');
       final upgraded = httpEndpoint.replace(scheme: 'https');
       (status, body) = await _postOnce(upgraded, ippBody);
     }
-    if (status >= 500) {
-      // 服务器侧瞬态故障：交由轮询重试吸收，不视为协议错误。
-      throw IppTransientException('HTTP $status from ${httpEndpoint.host}');
-    }
     if (status != HttpStatus.ok) {
+      _logWireFailure(httpEndpoint, status, ippBody, body, started);
+      // HTTP 5xx 属服务器侧瞬态故障，交由轮询重试吸收；其余为传输层错误。
+      if (status >= 500) {
+        throw IppTransientException('HTTP $status from ${httpEndpoint.host}');
+      }
       throw IppPrintException('HTTP $status from ${httpEndpoint.host}');
     }
-    return IppCodec.parseResponse(body);
+    final parsed = IppCodec.parseResponse(body);
+    _logWireResponse(httpEndpoint, status, ippBody, body, started, parsed);
+    return parsed;
   }
 
   /// 发送一次请求并收取原始响应（状态码与体；解析与错误判定交 [post]）。

@@ -250,6 +250,97 @@ job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收�
   注释 ×3）；UA 版本串漂移复发（0.6 → 0.7）。
   （端口出处原记为 §4.1 属错引，0.7.2 按一手原文更正为 §5。）
 
+### 0.7.5 — Kernel Diagnostics Coverage（已交付，2026-09-13）
+
+准入依据：CORE FREEZE 允许的「测试 / 正确性」——**公共 API 零变更、零新增依赖**，
+故可进补丁版（不必等 0.8.0 的 additive 窗口）。
+
+触发：0.7.4 的份数缺陷**只能靠自建裸 IPP 探针客户端**才定位得到——因为传输层
+零日志，后端回 `0x0001` 并列出被忽略的 `copies` 时宿主侧完全无声（`0x0001` 落在
+`isSuccessful` 的成功区间，连异常都没有）。诊断缺口本身即缺陷。
+
+事实基线（实测）：27 个实现文件仅 **5** 个有日志点（Dart 调用点 13：Facade 9 /
+原生发现 2 / 依赖 2）；原生 Swift 9；`IppClient.post` **零日志**；
+`mdns_discovery.dart` **零日志**；无层级（13 条同一优先级）。
+
+- [x] 传输层成对日志，落点 `IppClient.post()`（**全部 8 个算子的唯一咽喉**，故一处
+  覆盖全部）。算子名由**报文头部**读出（RFC 8010 §3.1.1），**不改公共签名**。
+  新增 part 文件 `lib/src/ipp/ipp_client_wire_log.dart`（走既有「part 文件」登记
+  路径，不占用父文件 400 行预算）。响应行带端点（宿主可并发探测多台打印机，不带
+  端点便无法归因）；**失败路径（HTTP 非 200）同样留响应行**，不留「有请求无响应」
+  的日志空洞。
+- [x] **被忽略属性告警**：响应含 Unsupported Attributes 组（RFC 8010 §3.5.1
+  Table 2：delimiter tag `0x05`）即逐个列出属性名，并注明该状态若落在成功区间则
+  **不另有渠道报告**。告警由**组**驱动而非由状态码驱动——RFC 8011 **§4.1.7**
+  规定该组可随四个状态码（`0x0001` / `0x0002` / `0x040B` / `0x040E`）出现，据组
+  取证才不丢信息。反向情形另发提示：状态码属该四者却**未带组**时（§4.1.7 对该
+  四者为 **MUST**）明示「被忽略的属性名不可知」；锚点含该对照例，并断言属性名
+  只能来自组。
+- [x] 打印管线：协商结论 / 文档产出摘要（页数、字节数、份数语义、下发 `copies=1`）
+  / 直投路径份数委派说明 / `job-id` / 终态与 `state-reasons`。
+- [x] 发现层（`mdns_discovery.dart`）：跳过必留原因（缺 SRV / 无可用 `rp` 两条
+  拒绝路径如实并列，**不猜是哪条**）；此前被 `catch` **完全吞掉**的查询异常如实
+  记录（**异常仍不抛出**，发现层契约不变）。
+- [x] **日志缝去 Flutter**（`ipp_log.dart`）：原 `kDebugMode` 使协议内核与发现层
+  「想打日志就传递性依赖 Flutter」，与 README「协议内核纯 Dart」冲突。改用
+  `assert` 包裹副作用——Dart 断言参数在非开发模式**不求值**，与 `kDebugMode` 在
+  所有标准构建模式下等价（debug 有 / profile·release 无）。**这是给发现层补点的
+  前置条件**：不改则 `mdns_discovery.dart`（现仅依赖 `meta` + `multicast_dns`）
+  会因一行日志被拖入 Flutter。
+- [x] 锚点 `test/logging_test.dart`（6 例）：传输层用**真实本地 HTTP 服务器**驱动
+  （`FakeQueueClient` 覆写了 `post()`，用它做锚点**等于什么都没锚**）；失败路径
+  响应行；Unsupported 组告警；「告警由组驱动而非状态码驱动」对照（含缺组提示）；
+  状态码名称手校锚点；管线四类结论。**敏感性验证（两轮实测）**：日志缝改为空实现
+  → **6 例全红**（`+0 -6`）；单独移除失败路径的日志调用 → 仅该例转红（`+5 -1`）。
+- [x] **修一处注释引用错误**：`validateJob` 文档称返回
+  `client-error-operation-not-supported`——该名称在 RFC 8011 **Appendix B.1.4
+  的 client error 段中并不存在**，更正为 `server-error-operation-not-supported`
+  （Appendix B.1.5.2，0x0501），一手文本核对。
+- [x] 状态码名称表逐条取自 **RFC 8011 Appendix B.1**（B.1.2 / B.1.4 / B.1.5）。
+  ⚠️ **首版凭记忆写错 3 处**（`not-possible` 记成 0x0405、`not-found` 记成
+  0x0403、`version-not-supported` 记成 0x0505），一手核对后更正——**同一类错误
+  在 0.7.2 的「引用审计轮」已发生过一次**，故本表加锚点防回归。
+- [x] **提交信息语言闸**（同轮交付）：见「工程纪律」段。
+- [x] 版本 0.7.4 → 0.7.5（pubspec / 双 podspec / `version.dart` 四处）；
+  双 README 补「如何拿到日志」；CHANGELOG 补 0.7.5 段。
+- [x] **同轮全链审计修订**（推送前发现，同版本内并入）：
+  - **引用错误**：Unsupported Attributes 组被标 `RFC 8011 §4.2.3`，而 §4.2.3 是
+    **Validate-Job Operation**，组的定义在 **§4.1.7**（原文：「This group is
+    primarily for the Job Creation operations, but **all operations can return
+    this group**」）。改正线路日志注释、`ipp_message.dart` 常量注释、本节与
+    CHANGELOG；逐处复核后，指 Validate-Job 的引用**本即正确**，未动。
+  - **闸失效开放**：`commit-msg --range` 在 `git rev-list` 报错时把空结果当作
+    「无提交」→ exit 0。已改为**失效关闭**（报 `cannot resolve range` 并 exit 1）；
+    实测畸形区间与不存在引用均转入 exit 1。
+  - **死形参**：`_logWireResponse` 的 `uri` 形参从未被使用（`flutter analyze` 不
+    检查未用形参，故此前未被发现）→ 改为在响应行打印端点，既消除死参，又为并发
+    探测多台打印机补上归因。
+  - **失败路径无响应日志**：`post()` 原先在 HTTP 非 200 时**先抛后记**，失败恰恰
+    没有日志 → 补 `_logWireFailure` 并加锚点（`ipp_client.dart` 行数保持 398/400）。
+  - **过程注释**：按仓库规则（`.cursorrules`「注释仅针对代码原本意义」）清除
+    「原实现 / 此前 / 首版草稿 / 0.7.5 新增」一类变更史叙述，保留标准依据与设计
+    约束（如「不要改用 `kDebugMode` / `print` / `debugPrint`」的原因）。
+
+**本轮显式不做（理由留档）**：
+
+- **不新增公共日志 API**（原审计报告推荐的 `IppLogLevel` + 两个可选具名参数）——
+  **撤回**。三条反证：① `TODO.md` 既定原则「**DEBUG log 给开发者，DiagnosticReport
+  给产品**」表明编译期门控是**设计边界而非缺陷**；② `IppPrint.diagnose()` →
+  `DiagnosticReport` 已排期 0.8.x 并附降级理由「组合能力而非内核能力」，新公共
+  日志面与之**同轴重叠**（等于给一件事造第二套面）；③ 新公共 API 不满足 CORE
+  FREEZE 准入（唯一标准 = 内核缺失的**协议能力**）且会撞 `test/public_api_test.dart`
+  闸。
+- **不引入 `package:logging`**：为一个已由 6 行实现覆盖的需求加依赖；且其
+  `hierarchicalLoggingEnabled` 默认 false（逐 logger 层级被忽略），库擅改全局开关
+  是更坏的副作用。
+- `ippProbeLog` 别名**不删除**：`ipp_print_core.dart` 已导出 → 属公共面，CORE
+  FREEZE 下移除即破坏性变更。新代码一律用 `ippLog`（两者共享同一实现，无行为
+  漂移）；命名统一留待 0.8.x。
+- 发现层新日志**不加锚点**：`MDnsClient` 无可注入点，不为测试改动公共构造签名。
+- `native_bonjour_discovery.dart`（已有 2 点）与 `ipp_print_core.dart`（probe /
+  inspect / validateJob 已有 6 点）本轮**未扩容**——它们的日志点已覆盖各自的主要
+  分叉。
+
 ### 0.7.4 — Copies Semantics on the Raster Path（已交付，2026-09-12）
 
 准入依据：CORE FREEZE 允许的「修 BUG / 协议正确性 / 测试 / 文档」。触发：
@@ -433,4 +524,11 @@ job-state 猜测与 CI 缺失同轮证实。0.4 交付后的协议正确性收�
 - **新增锚点必做敏感性验证**：临时还原旧行为，确认新用例转红。0.7.2 实测：
   `monitor()` 瞬态超时锚点在旧行为下转红（`git stash` 单文件后单跑该例）；
 - 真机验证记录注明机型与日期（如 EPSON L3250，2026-09-08 出纸验证）；
+- **提交信息语言（0.7.5 新增）**：提交信息一律**英文**——**作用域仅限提交信息**，
+  代码注释与双语文档维持现状不变。依据：仓库历史 43 条提交信息全为英文，0.7.4 的
+  推送混入过一条中文（已改写为 `6aac89e`，树内容逐字节不变）。闸为**单一实现两
+  入口**：本地 `.githooks/commit-msg`（经 `git config core.hooksPath .githooks`
+  生效）+ CI job `commit-message-language`，两者调用**同一脚本**，不存在第二份
+  判定逻辑（守「同契约双实现漂移」禁令）。判定只拒 CJK 字符范围，历史已用到的
+  非 ASCII 标点（如 RFC 引用中的 `§`）不受影响；
 - 发布日操作：移除 `publish_to: none` → `dart pub publish`（当前保持禁发防误发布）。

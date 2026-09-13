@@ -11,6 +11,9 @@ Exits 1 and names the offending characters when CJK text is found.
 Non-ASCII punctuation used by the English messages (for example the section
 sign U+00A7) is deliberately allowed; only CJK ranges are rejected.
 
+Fails CLOSED: if the range cannot be resolved, the gate refuses to pass rather
+than treating the empty result as "no commits to check".
+
 Installed via:  git config core.hooksPath .githooks
 """
 
@@ -50,9 +53,16 @@ def check_file(path):
 
 
 def check_range(rev_range):
-    shas = subprocess.run(
+    result = subprocess.run(
         ["git", "rev-list", rev_range], capture_output=True, text=True
-    ).stdout.split()
+    )
+    if result.returncode != 0:
+        print(
+            "::error::cannot resolve range '%s' -- refusing to pass" % rev_range
+        )
+        print(result.stderr.strip())
+        return False
+    shas = result.stdout.split()
     if not shas:
         print("commit message language OK (no commits in %s)" % rev_range)
         return True
@@ -64,7 +74,9 @@ def check_range(rev_range):
         if not report(sha[:8], body):
             ok = False
     if ok:
-        print("commit message language OK (%d commit(s) in %s)" % (len(shas), rev_range))
+        print(
+            "commit message language OK (%d commit(s) in %s)" % (len(shas), rev_range)
+        )
     return ok
 
 

@@ -67,6 +67,9 @@ Stream<Object> _prepareSubmission(
     document: document,
     printerFormats: attrs.documentFormats,
   );
+  ippLog('${printer.name}: negotiation -> ${decision.documentFormat} '
+      '(${decision.passthrough ? 'direct pass-through' : 'raster fallback'}), '
+      'printer declares ${attrs.documentFormats}');
   if (!decision.passthrough) {
     if (rasterizer == null) {
       throw IppPrintException(
@@ -128,8 +131,12 @@ Stream<Object> _prepareSubmission(
         pwg.add(p);
       }
     }
+    final produced = pwg.takeBytes();
+    ippLog('raster: pages=$pageNo copies=$copies (collated) '
+        'bytes=${produced.length} document-format=${decision.documentFormat} '
+        '-> sending copies=1; copies applied at the document layer');
     yield _PreparedSubmission(
-      bytes: pwg.takeBytes(),
+      bytes: produced,
       documentFormat: decision.documentFormat,
       options: _withCopies(options, 1),
       jobName: document.name ?? 'ipp_print-document',
@@ -143,6 +150,8 @@ Stream<Object> _prepareSubmission(
   // 且客户端无从在 PDF 内预产副本；CUPS 对 `application/pdf` 同样不下压
   // copies（其 `copies = 1` 分支只覆盖 image/* 与 CUPS raster）。该路径的
   // 份数依赖打印机实现，属已知边界（见 README 诚实清单）。
+  ippLog('direct: ${decision.documentFormat} bytes=${document.bytes.length} '
+      'copies=${options.copies} -> delegated to the printer RIP');
   yield _PreparedSubmission(
     bytes: Uint8List.fromList(document.bytes),
     documentFormat: decision.documentFormat,
@@ -183,12 +192,16 @@ Stream<PrintProgress> _submitAndAwait(
     options: options,
     jobName: jobName,
   );
+  ippLog('job ${summary.jobId} submitted: bytes=${bytes.length} '
+      'document-format=$documentFormat state=${summary.jobState.name} '
+      'reasons=${summary.stateReasons}');
   yield PrintProgress(PrintStage.waitingPrinter, jobId: summary.jobId);
   final state = await client.waitForTerminalState(
     printer,
     summary.jobId,
     timeout: jobTimeout,
   );
+  ippLog('job ${summary.jobId} reached terminal state: ${state.name}');
   if (state != IppJobState.completed) {
     throw IppPrintException('job ${summary.jobId} ended as ${state.name}');
   }

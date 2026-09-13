@@ -217,6 +217,42 @@ Discovery triggers the local-network privacy prompt. Declare in `Info.plist`:
 
 (See [Apple TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy), *Understanding local network privacy*.)
 
+### Debug logging
+
+The kernel narrates everything it does on one channel, every line prefixed
+`[ipp_print]`. It is Dart `print` output on standard output, which `flutter run`
+and `flutter logs` display — that is also how you read it from a device, since
+those commands attach to the running app.
+
+**There is no runtime switch, and that is deliberate.** The gate is a compile-time
+`assert`, so a release build emits nothing at all — debug-only by design
+(`TODO.md`: *DEBUG logs are for developers; `DiagnosticReport` is for the
+product*). Print from a debug build when you need to see what happened.
+
+What you get, in the order a print job produces it:
+
+- **transport** — one line per request and one per response: the operation name
+  (read from the wire, so it is the operation actually sent), the endpoint, request
+  and response byte counts, **both** the HTTP status and the IPP status (named, not
+  numeric), and the round-trip time. A response line is written even when the HTTP
+  status is an error, so "a request with no response" in the log really does mean
+  the request never came back;
+- **ignored attributes** — whenever a response carries an Unsupported Attributes
+  group, its attribute names are listed, and the line says so when the status sits
+  in the success range and nothing else will report it. Conversely, if the status
+  is one for which RFC 8011 §4.1.7 *requires* that group and the printer sent
+  none, that is reported too. This is the line that turns "the printer quietly
+  did something else" into a one-line diagnosis;
+- **pipeline** — the negotiation outcome (direct pass-through vs raster fallback,
+  and the format chosen), the produced document (page count, bytes, copy
+  semantics), the `job-id`, and the terminal state with `job-state-reasons`;
+- **discovery** — one line per accepted printer and one per skipped instance,
+  naming the reason (no SRV record, or no usable `rp`).
+
+`Get-Job-Attributes` polls are logged every iteration, so waiting on a job is
+verbose on purpose — a job that never reaches a terminal state is exactly when
+you want the trail. See *Limitations* for what this channel does **not** cover.
+
 ## Implementation decisions ← standards mapping
 
 Every protocol behavior traces back to an authoritative source; community implementations are used for cross-checking only, never as a basis:
@@ -266,6 +302,8 @@ serve as capability checklists.
 7. **Discovery timeout semantics differ between transports** — the native browser is bounded by one hard deadline, while `MDnsPrinterDiscovery` resolves instances serially, so its worst case is roughly `10 s × number of instances` rather than the requested timeout.
 
 8. **Copies are produced by the client on the raster path, and left to the printer on the direct-send path** — a streaming raster document (`image/pwg-raster`) cannot rely on the printer to duplicate it: CUPS itself forces `copies = 1` for `image/*` and `application/vnd.cups-raster` and lets the upstream filter pre-produce the copies (`cups/ppd-cache.c` `_cupsConvertOptions`), and some printers advertise `copies-supported` yet answer `successful-ok-ignored-or-substituted-attributes` (`0x0001`) and print a single copy — a status this package treats as success, so the shortfall would otherwise be silent. The raster path therefore repeats the **whole page sequence** `copies` times (collated, per RFC 8011 §5.2.5 / §2.3.10 Set semantics) and sends `copies=1`. On the direct-send path (e.g. `application/pdf`) the client cannot pre-produce copies inside the payload, so `copies` is passed through and the outcome depends on the printer's RIP. Note that `copies` is a **REQUIRED** Job Template attribute in IPP Everywhere (PWG 5100.14 Table 8, §9.3) for jpeg/pdf-capable printers, so a printer that accepts the value and silently ignores it is non-conforming.
+
+9. **The debug log has no runtime switch and no levels** — it is gated by a compile-time `assert`, so a release build emits nothing, which puts field diagnosis on a user's device out of its scope (that is `DiagnosticReport`, planned for 0.8.x). Messages are also built eagerly at the call site, and string construction in a release build is **not guaranteed** to be eliminated (interpolation may call `toString`); the magnitude has not been benchmarked, so "zero cost" is not claimed. The channel is raw `print`, not `debugPrint`: Flutter throttles `debugPrint` because platforms rate-limit their logging — the implementation comment reads *"This avoids dropping messages on platforms that rate-limit their logging (for example, Android)"* (`foundation/print.dart`) — so raw `print` can in principle be dropped there. The volume is two lines per operation, far below that ceiling, but the boundary is real. The transport layer logs both directions for every operation, so a job polled every 2 s is verbose by design.
 
 ## FAQ
 

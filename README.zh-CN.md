@@ -223,6 +223,34 @@ if (!job.isTerminal) {
 
 （参见 [Apple TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)《理解本地网络隐私》。）
 
+### 调试日志
+
+内核把做过的事全部记在一条通道上，每行以 `[ipp_print]` 开头。它是 Dart 的 `print`
+输出，走标准输出，因此 `flutter run` 与 `flutter logs` 都能看到——真机上也一样，
+这两条命令会附着到运行中的应用。
+
+**没有运行期开关，这是刻意的。** 门控是一个编译期 `assert`，因此 release 构建
+**什么都不输出**——设计上就是「只给调试构建」（`TODO.md`：
+**DEBUG log 给开发者，DiagnosticReport 给产品**）。需要看现场时用 debug 构建打印。
+
+按一次打印的发生顺序，你会拿到：
+
+- **传输层**——每个请求一行、每个响应一行：算子名（从**报文头部**读出，即实际发出
+  的那个算子）、端点、请求与响应字节数、**HTTP 与 IPP 两层**状态码（是名称不是
+  数字）、以及往返耗时。**HTTP 状态为错误时同样写响应行**，因此日志里出现「有请求
+  行、无响应行」就确实意味着请求没有返回；
+- **被忽略属性**——只要响应里带 Unsupported Attributes 组，就逐个列出属性名，并
+  在该状态落在成功区间时点明「不另有渠道报告」。反向情形也会报：若状态码按
+  RFC 8011 §4.1.7 **必须**带组而打印机没带，同样明示。正是这一行把「打印机悄悄
+  做了别的事」变成一行即可定论的诊断；
+- **打印管线**——协商结论（直投还是栅格回退、选定了哪个格式）、产出的文档（页数、
+  字节数、份数语义）、`job-id`、终态与 `job-state-reasons`；
+- **发现层**——每个被采纳的打印机一行、每个被跳过的实例一行，并写明原因（无 SRV
+  记录，或无可用 `rp`）。
+
+`Get-Job-Attributes` 轮询**逐次**记录，所以等待作业时输出很密——这是刻意的：作业
+迟迟不到终态的场合，正是最需要这条线索的时候。本通道**不覆盖**什么，见「边界」段。
+
 ## 实现决策 ← 标准条款对照
 
 每条协议行为都可回溯到权威来源；社区实现仅用于交叉核对，从不作为依据：
@@ -272,6 +300,8 @@ HP 官方 [jipp](https://github.com/HPInc/jipp) 与 istopwg 指南
 7. **两条发现通道的超时语义不同** —— 原生浏览器由单一硬 deadline 约束；`MDnsPrinterDiscovery` 逐实例串行解析，最坏耗时约为 `10 秒 × 实例数`，而非请求的 timeout。
 
 8. **份数：栅格路径由客户端实产、直投路径交给打印机** —— 流式光栅文档（`image/pwg-raster`）不能指望打印机自行复制：CUPS 对流式光栅同样**强制 `copies = 1`**，由上游过滤器预产副本（`cups/ppd-cache.c` `_cupsConvertOptions`）；部分打印机自报 `copies-supported` 却回 `successful-ok-ignored-or-substituted-attributes`（`0x0001`）并只印一份 —— 该状态本包视为成功，故缺口原本是**静默**的。现栅格路径把**整份页序**重复 `copies` 次（collated，依 RFC 8011 §5.2.5 / §2.3.10 的 Set 语义）并下发 `copies=1`。直投路径（如 `application/pdf`）客户端无从在负载内预产副本，故 `copies` 原样下发，最终取决于打印机 RIP。另需注意：对支持 jpeg/pdf 的打印机，`copies` 在 IPP Everywhere（PWG 5100.14 Table 8、§9.3）中是 **REQUIRED** 作业属性 —— 收下却静默忽略即属不合规。
+
+9. **调试日志没有运行期开关，也没有分级** —— 它由编译期 `assert` 门控，故 release 构建**什么都不输出**，因此「在用户设备上做现场取证」不在它职责内（那是 0.8.x 的 `DiagnosticReport`）。日志文本在**调用点**求值，release 下字符串构造**不保证**被消除（插值可能触发 `toString`）；量级未做基准测量，故不声称「零开销」。通道用的是裸 `print` 而非 `debugPrint`：Flutter 之所以给 `debugPrint` 加节流，正是因为部分平台会限制日志写入速率——其实现注释原文 *"This avoids dropping messages on platforms that rate-limit their logging (for example, Android)"*（`foundation/print.dart`）——故裸 `print` 在这些平台上理论上可能丢消息。本通道每次操作仅两行，远低于该上限，但边界确实存在。传输层对每个算子的两个方向各记一行，因此每 2 秒轮询一次的作业会显得冗长，这是刻意的。
 
 ## FAQ
 

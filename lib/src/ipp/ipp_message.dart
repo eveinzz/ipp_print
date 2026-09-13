@@ -52,8 +52,9 @@ class IppCodec {
   static const int opGetJobs = 0x000A;
   static const int opGetPrinterAttributes = 0x000B;
 
-  /// Validate-Job 响应的 Unsupported Attributes 组（RFC 8010 delimiter
-  /// tag 0x05；RFC 8011 §4.2.3：打印机按 Print-Job 同款返回组 2）。
+  /// Unsupported Attributes 组（RFC 8010 §3.5.1 Table 2：delimiter tag 0x05）。
+  /// RFC 8011 §4.1.7 明言该组「all operations can return」；在 Validate-Job
+  /// 的响应中它固定为组 2（§4.2.3）。
   static const int tagUnsupportedGroup = 0x05;
 
   /// 生成 Print-Job 请求头（文档数据由调用方直接追加在尾部）。

@@ -189,8 +189,9 @@ class IppPrint {
 
   /// Validate-Job 预检（RFC 8011 §4.2.3）：提交大文档前先问打印机
   /// 「这个 Job 你能不能处理」。返回 [PrintValidationResult]；
-  /// 打印机不支持该操作时返回 client-error-operation-not-supported
-  /// （valid=false），宿主可回退为直接提交。
+  /// 打印机不支持该操作时返回 `server-error-operation-not-supported`
+  /// （Appendix B.1.5.2，0x0501——属 server-error 段，勿写成并不存在的
+  /// `client-error-operation-not-supported`），宿主可回退为直接提交。
   ///
   /// 整机限时 10s（同 [probe]/[inspect] 挂起防御——半开 TCP 连接下
   /// 无限等待是 probe 阶段验证过的真实故障模式），超时抛
